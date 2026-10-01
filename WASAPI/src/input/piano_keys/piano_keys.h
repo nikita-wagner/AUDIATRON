@@ -1,0 +1,54 @@
+// ═══════════════════════════════════════════════════════════════════════════
+//  input/piano_keys/piano_keys.h — the computer keyboard as a piano keyboard
+//
+//  Two key rows laid out like a piano, 17 semitones from C:
+//
+//      black:   W E   T Z U   O P          (QWERTZ labels)
+//      white:  A S D F G H J K L Ö
+//               C D E F G A H C D E
+//
+//      Y / X   octave down / up
+//
+//  Pure input logic, shared by every instrument that is played like a piano.
+//  It turns key events into "start note N" / "stop note N" and remembers which
+//  key started which note. It does not know the engine: the instrument that
+//  owns it decides what a note does.
+//
+//      int note;
+//      switch (piano_keys_event(&keys, ev, &note)) {
+//      case AT_PIANO_KEYS_NOTE_ON:  engine_note_on (engine, channel, note, velocity); return true;
+//      case AT_PIANO_KEYS_NOTE_OFF: engine_note_off(engine, channel, note);           return true;
+//      case AT_PIANO_KEYS_USED:     return true;
+//      case AT_PIANO_KEYS_NOT_MINE: break;      // free for the instrument's own controls
+//      }
+// ═══════════════════════════════════════════════════════════════════════════
+
+#pragma once
+
+#include "input/key_event.h"
+
+// First help line of every instrument that uses this layout.
+#define PIANO_KEYS_HELP "  A W S E D F T G Z H U J K O L P Oe   play notes (QWERTZ labels)\n"
+
+typedef enum {
+    AT_PIANO_KEYS_NOT_MINE,     // not a piano key
+    AT_PIANO_KEYS_USED,         // a piano key with nothing to do (auto-repeat, octave change)
+    AT_PIANO_KEYS_NOTE_ON,      // *note has to start
+    AT_PIANO_KEYS_NOTE_OFF      // *note has to stop
+} AT_PianoKeysResult;
+
+typedef struct {
+    int octave;                 // octave of the leftmost key (4 = C4)
+    int held[AT_SC_COUNT];      // scan code → MIDI note it started, -1 = none
+} AT_PianoKeys;
+
+void piano_keys_init(AT_PianoKeys* k, int octave);
+
+AT_PianoKeysResult piano_keys_event(AT_PianoKeys* k, const AT_KeyEvent* ev, int* note);
+
+// Forgets one held key per call and reports the note it had started; false
+// when none is left. For releasing everything, e.g. when the instrument loses
+// the keyboard:
+//     int note;
+//     while (piano_keys_release_next(&keys, &note)) engine_note_off(engine, channel, note);
+bool piano_keys_release_next(AT_PianoKeys* k, int* note);
