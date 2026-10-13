@@ -22,13 +22,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define AT_QUEUE_CAPACITY 256       // pending commands (must be a power of two)
+#define AT_QUEUE_CAPACITY 2048      // pending commands (must be a power of two); a replay sends many at once
 
 typedef struct {
     uint32_t type;
     int32_t  i[4];
     float    f[4];
     void*    p[2];
+    uint64_t frame;                 // when to apply it (engine frame); 0 = as soon as possible
+    int32_t  tag;                   // groups timed commands so they can be cancelled together; 0 = none
 } AT_Command;
 
 typedef struct {

@@ -1,0 +1,132 @@
+# AUDIATRON input recording. One event per line: seconds since the start, then what happened.
+# "key" lines are what was pressed; "pad" lines are what the drumpad did (the replay plays those).
+audiatron recording 1
+rate 44100
+clock 37645965
+track 1 piano
+track 2 layers
+track 3 drumpad
+track 4 replay
+track 5 fusion
+pad 1 A file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\example.wav
+pad 2 S file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-acer-hardtekk-kick-112753.mp3
+pad 3 D file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-bass-ui-298402.mp3
+pad 4 F file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-schub-wiese-kick-310488.mp3
+0.000000 track 1 volume 0.199999988
+0.000000 track 1 pan 0
+0.000000 track 1 mute off
+0.000000 track 1 solo off
+0.000000 track 1 hold off
+0.000000 track 1 echo_ms 350
+0.000000 track 2 volume 0.700000048
+0.000000 track 2 pan 0
+0.000000 track 2 mute off
+0.000000 track 2 solo off
+0.000000 track 2 hold off
+0.000000 track 2 echo_ms 826
+0.000000 track 3 volume 0.800000012
+0.000000 track 3 pan 0
+0.000000 track 3 mute off
+0.000000 track 3 solo off
+0.000000 track 3 hold off
+0.000000 track 3 echo_ms 526
+0.000000 track 1 synth wave 0
+0.000000 track 1 synth attack 0.00499999989
+0.000000 track 1 synth decay 0.25
+0.000000 track 1 synth sustain 0.600000024
+0.000000 track 1 synth release 0.400000006
+0.000000 track 1 synth gain 0.200000003
+0.000000 track 1 synth detune 0
+0.000000 track 2 layers 1 volume 1
+0.000000 track 2 layers 1 pan -0.150000006
+0.000000 track 2 layers 1 mute 1
+0.000000 track 2 layers 1 transpose 0
+0.000000 track 2 layers 2 volume 0.5
+0.000000 track 2 layers 2 pan 0.300000012
+0.000000 track 2 layers 2 mute 0
+0.000000 track 2 layers 2 transpose 0
+0.000000 track 2 layers 3 volume 0.349999994
+0.000000 track 2 layers 3 pan 0
+0.000000 track 2 layers 3 mute 1
+0.000000 track 2 layers 3 transpose -12
+0.000000 pad 1 A pitch +0
+0.000000 pad 1 A tempo off
+0.000000 pad 1 A volume 1
+0.000000 pad 1 A pan 0
+0.000000 pad 1 A sync on
+0.000000 pad 1 A echo_ms 526
+0.000000 pad 1 A timing 0ms 0ms
+0.000000 pad 1 A cut 0 1
+0.000000 pad 1 A crush off
+0.000000 pad 1 A tremolo off
+0.000000 pad 1 A echo off
+0.000000 pad 1 A loop off
+0.000000 pad 2 S pitch +0
+0.000000 pad 2 S tempo off
+0.000000 pad 2 S volume 0.3
+0.000000 pad 2 S pan 0
+0.000000 pad 2 S sync on
+0.000000 pad 2 S echo_ms 526
+0.000000 pad 2 S timing 0ms 0ms
+0.000000 pad 2 S cut 0 1
+0.000000 pad 2 S crush off
+0.000000 pad 2 S tremolo off
+0.000000 pad 2 S echo on
+0.000000 pad 2 S loop off
+0.000000 pad 3 D pitch +0
+0.000000 pad 3 D tempo off
+0.000000 pad 3 D volume 0.2
+0.000000 pad 3 D pan 0
+0.000000 pad 3 D sync on
+0.000000 pad 3 D echo_ms 526
+0.000000 pad 3 D timing 0ms 0ms
+0.000000 pad 3 D cut 0 1
+0.000000 pad 3 D crush off
+0.000000 pad 3 D tremolo off
+0.000000 pad 3 D echo off
+0.000000 pad 3 D loop off
+0.000000 pad 4 F pitch +0
+0.000000 pad 4 F tempo off
+0.000000 pad 4 F volume 0.8
+0.000000 pad 4 F pan 0
+0.000000 pad 4 F sync on
+0.000000 pad 4 F echo_ms 526
+0.000000 pad 4 F timing 0ms 0ms
+0.000000 pad 4 F cut 0 1
+0.000000 pad 4 F crush off
+0.000000 pad 4 F tremolo off
+0.000000 pad 4 F echo off
+0.000000 pad 4 F loop off
+0.000000 track 3 select drumpad
+0.020000 key F5 up
+0.420000 pad 2 S hit 1
+0.670000 pad 2 S hit 1
+0.670000 pad 3 D hit 1
+0.670000 pad 4 F hit 1
+0.920000 pad 2 S hit 1
+1.170000 pad 2 S hit 1
+1.170000 pad 3 D hit 1
+1.420000 pad 2 S hit 1
+1.670000 pad 2 S hit 1
+1.670000 pad 3 D hit 1
+1.670000 pad 4 F hit 1
+1.920000 pad 2 S hit 1
+2.170000 pad 2 S hit 1
+2.170000 pad 3 D hit 1
+2.420000 pad 2 S hit 1
+2.670000 pad 2 S hit 1
+2.670000 pad 3 D hit 1
+2.670000 pad 4 F hit 1
+2.920000 pad 2 S hit 1
+3.170000 pad 2 S hit 1
+3.170000 pad 3 D hit 1
+3.420000 pad 2 S hit 1
+3.670000 pad 2 S hit 1
+3.670000 pad 3 D hit 1
+3.670000 pad 4 F hit 1
+3.920000 pad 2 S hit 1
+4.170000 pad 2 S hit 1
+4.170000 pad 3 D hit 1
+4.420000 pad 2 S hit 1
+4.410000 key F7 down
+4.410000 end

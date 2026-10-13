@@ -6,7 +6,7 @@ const char* oscillator_waveform_name(AT_Waveform w) {
     case AT_WAVE_SAW:      return "saw";
     case AT_WAVE_SQUARE:   return "square";
     case AT_WAVE_TRIANGLE: return "triangle";
-    case AT_WAVE_NOISE:    return "noise";
+    case AT_WAVE_CIRCLE:   return "circle";
     default:               return "?";
     }
 }

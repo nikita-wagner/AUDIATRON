@@ -9,7 +9,42 @@
 #include "engine/engine.h"
 #include "engine/engine_commands.h"
 
-static bool push(AT_Engine* e, AT_Command c) { return at_queue_push(&e->queue, &c); }
+// Every command carries the time and tag set with engine_at.
+static bool push(AT_Engine* e, AT_Command c) {
+    c.frame = e->stamp_frame;
+    c.tag   = e->stamp_tag;
+    return at_queue_push(&e->queue, &c);
+}
+
+static void observe(AT_Engine* e, AT_EngineEvent ev) {
+    if (e->observer) e->observer(e->observer_user, &ev);
+}
+
+// ─── Timing and observing ────────────────────────────────────────────────────
+
+uint64_t engine_now(const AT_Engine* e) {
+    // 64 bits written by the audio thread; on a 32-bit CPU a read can tear, so
+    // read until two reads agree.
+    const volatile uint64_t* clock = &e->frame_clock;
+    uint64_t a, b;
+    do { a = *clock; b = *clock; } while (a != b);
+    return a;
+}
+
+void engine_at(AT_Engine* e, uint64_t frame, int tag) {
+    e->stamp_frame = frame;
+    e->stamp_tag   = tag;
+}
+
+bool engine_cancel(AT_Engine* e, int tag) {
+    AT_Command c = { .type = AT_CMD_CANCEL, .i = { tag } };    // not stamped: applies at once
+    return at_queue_push(&e->queue, &c);
+}
+
+void engine_set_observer(AT_Engine* e, AT_EngineObserver fn, void* user) {
+    e->observer      = fn;
+    e->observer_user = user;
+}
 
 // ─── Sources ─────────────────────────────────────────────────────────────────
 
@@ -19,14 +54,17 @@ bool engine_set_source(AT_Engine* e, uint32_t channel, const AT_SourceType* type
 }
 
 bool engine_note_on(AT_Engine* e, uint32_t channel, int note, float velocity) {
+    observe(e, (AT_EngineEvent){ .type = AT_ENGINE_EV_NOTE_ON, .channel = (int)channel, .note = note, .value = velocity });
     return push(e, (AT_Command){ .type = AT_CMD_NOTE_ON, .i = { (int)channel, note }, .f = { velocity } });
 }
 
 bool engine_note_off(AT_Engine* e, uint32_t channel, int note) {
+    observe(e, (AT_EngineEvent){ .type = AT_ENGINE_EV_NOTE_OFF, .channel = (int)channel, .note = note });
     return push(e, (AT_Command){ .type = AT_CMD_NOTE_OFF, .i = { (int)channel, note } });
 }
 
 bool engine_all_notes_off(AT_Engine* e, int channel) {
+    observe(e, (AT_EngineEvent){ .type = AT_ENGINE_EV_ALL_NOTES_OFF, .channel = channel });
     return push(e, (AT_Command){ .type = AT_CMD_ALL_NOTES_OFF, .i = { channel } });
 }
 
@@ -43,6 +81,7 @@ bool engine_set_hook(AT_Engine* e, AT_HookPoint point, uint32_t channel, uint32_
 }
 
 bool engine_set_param(AT_Engine* e, AT_ParamFn fn, void* self, int param, float value) {
+    observe(e, (AT_EngineEvent){ .type = AT_ENGINE_EV_PARAM, .fn = fn, .self = self, .param = param, .value = value });
     return push(e, (AT_Command){ .type = AT_CMD_SET_PARAM, .i = { param }, .f = { value },
                                  .p = { (void*)fn, self } });
 }
@@ -59,6 +98,11 @@ bool engine_set_channel_pan(AT_Engine* e, uint32_t channel, float pan) {
 
 bool engine_set_channel_mute(AT_Engine* e, uint32_t channel, bool mute) {
     return push(e, (AT_Command){ .type = AT_CMD_SET_CH_MUTE, .i = { (int)channel, mute } });
+}
+
+bool engine_set_channel_clock(AT_Engine* e, uint32_t channel, uint64_t offset) {
+    return push(e, (AT_Command){ .type = AT_CMD_SET_CH_CLOCK,
+                                 .i = { (int)channel, (int32_t)(uint32_t)offset, (int32_t)(uint32_t)(offset >> 32) } });
 }
 
 bool engine_set_master_volume(AT_Engine* e, float volume) {

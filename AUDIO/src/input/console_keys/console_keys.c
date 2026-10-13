@@ -33,13 +33,17 @@ uint32_t console_keys_poll(AT_ConsoleKeys* k, uint32_t timeout_ms, AT_KeyEvent* 
         if (records[r].EventType != KEY_EVENT) continue;        // mouse, resize, focus...
         const KEY_EVENT_RECORD* key = &records[r].Event.KeyEvent;
 
-        uint16_t scan = key->wVirtualScanCode & 0xFF;
-        bool     down = key->bKeyDown != 0;
+        uint16_t scan     = key->wVirtualScanCode & 0xFF;
+        bool     down     = key->bKeyDown != 0;
+        bool     extended = (key->dwControlKeyState & ENHANCED_KEY) != 0;    // Up arrow vs numpad 8
+        uint32_t slot     = scan + (extended ? AT_SC_COUNT : 0);
 
         out[n].scan_code = scan;
+        out[n].ch        = key->uChar.AsciiChar;           // layout + Shift applied by Windows
         out[n].down      = down;
-        out[n].repeat    = down && k->is_down[scan];
-        k->is_down[scan] = down;
+        out[n].extended  = extended;
+        out[n].repeat    = down && k->is_down[slot];
+        k->is_down[slot] = down;
         n++;
     }
     return n;

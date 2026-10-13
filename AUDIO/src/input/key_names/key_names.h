@@ -9,7 +9,11 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
 
 // Writes e.g. "C", "Tab", "Esc" to out; "?" if the key has no name.
 void key_name(uint16_t scan_code, char* out, size_t cap);
+
+// The same for an extended key ("Up" instead of the numpad's "8").
+void key_name_ex(uint16_t scan_code, bool extended, char* out, size_t cap);

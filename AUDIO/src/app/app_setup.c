@@ -19,7 +19,7 @@ static void master_setup(AT_App* app) {
     engine_set_master_volume(&app->engine, app->master_volume);
 }
 
-// Switches on the effects named with --fx.
+// Switches on the effects named with --fx, on the start track only.
 static bool apply_fx_options(AT_App* app) {
     for (uint32_t i = 0; i < app->options.fx_count; i++) {
         int index = app_effect_find(app, app->options.fx[i]);
@@ -29,15 +29,17 @@ static bool apply_fx_options(AT_App* app) {
             fprintf(stderr, "\n");
             return false;
         }
-        app_effect_set(app, (uint32_t)index, true);
+        app_effect_set(app, (uint32_t)index, app->tracks.selected, true);
     }
     return true;
 }
 
-// Selects the track named with --track.
+// Selects the track named with --track; without it, the first sound-file track, else track 1.
 static bool apply_track_option(AT_App* app) {
     int track = app->options.track;
-    if (track >= 1 && track_list_select(&app->tracks, (uint32_t)(track - 1))) return true;
+    if (track <= 0 && app->options.replay_path && app->replay_track >= 0) track = app->replay_track + 1;
+    if (track <= 0) track = app->first_sound_track >= 0 ? app->first_sound_track + 1 : 1;
+    if (track_list_select(&app->tracks, (uint32_t)(track - 1))) return true;
 
     fprintf(stderr, "no track %d. Tracks:", track);
     for (uint32_t i = 0; i < app->tracks.count; i++)
@@ -48,12 +50,30 @@ static bool apply_track_option(AT_App* app) {
 
 bool app_setup(AT_App* app, float sample_rate) {
     engine_init(&app->engine, sample_rate);
+    app->sample_rate = sample_rate;
 
     master_setup(app);
-    app_instruments_setup(app, sample_rate);
-    app_effects_setup(app, sample_rate);
+    if (!app_instruments_setup(app, sample_rate)) {          // a sound file would not load (already reported)
+        engine_shutdown(&app->engine);
+        return false;
+    }
+    app_effects_setup(app);
+    app_replay_setup(app);
 
-    if (!apply_fx_options(app) || !apply_track_option(app)) {
+    // --replay: the recording goes onto the replay track before anything plays
+    if (app->options.replay_path && !app_replay_load(app, app->options.replay_path)) {
+        app_replay_teardown(app);
+        app_effects_teardown(app);
+        app_instruments_teardown(app);
+        engine_shutdown(&app->engine);
+        return false;
+    }
+
+    // the track first: --fx switches effects on for the start track
+    if (!apply_track_option(app) || !apply_fx_options(app)) {
+        app_replay_teardown(app);
+        app_effects_teardown(app);
+        app_instruments_teardown(app);
         engine_shutdown(&app->engine);
         return false;
     }
@@ -61,5 +81,9 @@ bool app_setup(AT_App* app, float sample_rate) {
 }
 
 void app_teardown(AT_App* app) {
+    app_record_shutdown(app);                               // closes recording files (the audio thread has stopped)
     engine_shutdown(&app->engine);
+    app_replay_teardown(app);
+    app_effects_teardown(app);
+    app_instruments_teardown(app);
 }

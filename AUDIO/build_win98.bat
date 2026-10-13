@@ -17,6 +17,10 @@ rem -------------------------------------------------------------------------
 setlocal
 cd /d "%~dp0"
 
+rem Some launchers start with a PATH that lacks the Windows system folder (findstr).
+where where >nul 2>nul
+if errorlevel 1 set "PATH=%SystemRoot%\System32;%SystemRoot%;%PATH%"
+
 if not defined MSYS2_ROOT set "MSYS2_ROOT=C:\msys64"
 if not exist "%MSYS2_ROOT%\mingw32\bin\gcc.exe" (
     echo The 32-bit MinGW GCC was not found in %MSYS2_ROOT%\mingw32\bin

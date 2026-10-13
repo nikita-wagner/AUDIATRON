@@ -1,0 +1,560 @@
+# AUDIATRON input recording. One event per line: seconds since the start, then what happened.
+# "key" lines are what was pressed; "pad" lines are what the drumpad did (the replay plays those).
+audiatron recording 1
+rate 44100
+clock 29643138
+track 1 piano
+track 2 layers
+track 3 drumpad
+track 4 replay
+track 5 fusion
+pad 1 A file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\example.wav
+pad 2 S file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-acer-hardtekk-kick-112753.mp3
+pad 3 D file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-bass-ui-298402.mp3
+pad 4 F file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-schub-wiese-kick-310488.mp3
+0.000000 track 1 volume 2
+0.000000 track 1 pan 0
+0.000000 track 1 mute off
+0.000000 track 1 solo off
+0.000000 track 1 hold off
+0.000000 track 1 echo_ms 126
+0.000000 track 1 echo on
+0.000000 track 2 volume 0.700000048
+0.000000 track 2 pan 0
+0.000000 track 2 mute off
+0.000000 track 2 solo off
+0.000000 track 2 hold off
+0.000000 track 2 echo_ms 1476
+0.000000 track 2 echo on
+0.000000 track 3 volume 0.800000012
+0.000000 track 3 pan 0
+0.000000 track 3 mute off
+0.000000 track 3 solo off
+0.000000 track 3 hold off
+0.000000 track 3 echo_ms 350
+0.000000 track 1 synth wave 0
+0.000000 track 1 synth attack 0.00499999989
+0.000000 track 1 synth decay 0.25
+0.000000 track 1 synth sustain 0.600000024
+0.000000 track 1 synth release 0.400000006
+0.000000 track 1 synth gain 0.200000003
+0.000000 track 1 synth detune 0
+0.000000 track 2 layers 1 volume 1
+0.000000 track 2 layers 1 pan -0.150000006
+0.000000 track 2 layers 1 mute 0
+0.000000 track 2 layers 1 transpose 0
+0.000000 track 2 layers 2 volume 0.5
+0.000000 track 2 layers 2 pan 0.300000012
+0.000000 track 2 layers 2 mute 0
+0.000000 track 2 layers 2 transpose 0
+0.000000 track 2 layers 3 volume 0.349999994
+0.000000 track 2 layers 3 pan 0
+0.000000 track 2 layers 3 mute 0
+0.000000 track 2 layers 3 transpose -12
+0.000000 pad 1 A pitch +0
+0.000000 pad 1 A tempo off
+0.000000 pad 1 A volume 1
+0.000000 pad 1 A pan 0
+0.000000 pad 1 A sync on
+0.000000 pad 1 A echo_ms 350
+0.000000 pad 1 A timing 0ms 0ms
+0.000000 pad 1 A cut 0 1
+0.000000 pad 1 A crush off
+0.000000 pad 1 A tremolo off
+0.000000 pad 1 A echo off
+0.000000 pad 1 A loop off
+0.000000 pad 2 S pitch -14
+0.000000 pad 2 S tempo on
+0.000000 pad 2 S volume 1
+0.000000 pad 2 S pan 0
+0.000000 pad 2 S sync on
+0.000000 pad 2 S echo_ms 350
+0.000000 pad 2 S timing 0ms 250ms
+0.000000 pad 2 S cut 0ms 250ms
+0.000000 pad 2 S crush off
+0.000000 pad 2 S tremolo on
+0.000000 pad 2 S echo off
+0.000000 pad 2 S loop on
+0.000000 pad 3 D pitch +0
+0.000000 pad 3 D tempo off
+0.000000 pad 3 D volume 1
+0.000000 pad 3 D pan 0
+0.000000 pad 3 D sync on
+0.000000 pad 3 D echo_ms 350
+0.000000 pad 3 D timing 0ms 0ms
+0.000000 pad 3 D cut 0 1
+0.000000 pad 3 D crush off
+0.000000 pad 3 D tremolo off
+0.000000 pad 3 D echo off
+0.000000 pad 3 D loop off
+0.000000 pad 4 F pitch +0
+0.000000 pad 4 F tempo off
+0.000000 pad 4 F volume 1
+0.000000 pad 4 F pan 0
+0.000000 pad 4 F sync on
+0.000000 pad 4 F echo_ms 350
+0.000000 pad 4 F timing 0ms 500ms
+0.000000 pad 4 F cut 0ms 432ms
+0.000000 pad 4 F crush off
+0.000000 pad 4 F tremolo off
+0.000000 pad 4 F echo off
+0.000000 pad 4 F loop on
+0.000000 pad 2 S loop start
+0.000000 pad 4 F loop start
+0.000000 track 2 select layers
+0.060000 key F5 up
+0.900000 key E down
+0.900000 track 2 note 63 on 0.800000012
+0.900000 key F down
+0.900000 track 2 note 65 on 0.800000012
+1.000000 key E up
+1.000000 track 2 note 63 off
+1.000000 key F up
+1.000000 track 2 note 65 off
+3.560000 key F down
+3.560000 track 2 note 65 on 0.800000012
+3.560000 key E down
+3.560000 track 2 note 63 on 0.800000012
+3.940000 key -_(ZEHNERTASTATUR) down
+3.940000 track 2 echo_ms 1451
+4.460000 track 2 echo_ms 1426
+4.480000 track 2 echo_ms 1401
+4.500000 track 2 echo_ms 1376
+4.560000 track 2 echo_ms 1351
+4.600000 track 2 echo_ms 1326
+4.620000 track 2 echo_ms 1301
+4.660000 track 2 echo_ms 1276
+4.680000 track 2 echo_ms 1251
+4.720000 track 2 echo_ms 1226
+4.760000 track 2 echo_ms 1201
+4.780000 track 2 echo_ms 1176
+4.820000 track 2 echo_ms 1151
+4.840000 track 2 echo_ms 1126
+4.900000 track 2 echo_ms 1101
+4.920000 track 2 echo_ms 1076
+4.960000 track 2 echo_ms 1051
+4.980000 track 2 echo_ms 1026
+5.020000 track 2 echo_ms 1001
+5.040000 track 2 echo_ms 976
+5.080000 track 2 echo_ms 951
+5.100000 track 2 echo_ms 926
+5.140000 track 2 echo_ms 901
+5.180000 track 2 echo_ms 876
+5.220000 track 2 echo_ms 851
+5.240000 track 2 echo_ms 826
+5.280000 track 2 echo_ms 801
+5.300000 track 2 echo_ms 776
+5.340000 track 2 echo_ms 751
+5.360000 track 2 echo_ms 726
+5.400000 track 2 echo_ms 701
+5.460000 track 2 echo_ms 676
+5.480000 track 2 echo_ms 651
+5.520000 track 2 echo_ms 626
+5.540000 track 2 echo_ms 601
+5.560000 track 2 echo_ms 576
+5.600000 track 2 echo_ms 551
+5.640000 track 2 echo_ms 526
+5.680000 track 2 echo_ms 501
+5.720000 track 2 echo_ms 476
+5.740000 track 2 echo_ms 451
+5.780000 track 2 echo_ms 426
+5.800000 track 2 echo_ms 401
+5.840000 track 2 echo_ms 376
+5.860000 track 2 echo_ms 351
+5.900000 track 2 echo_ms 326
+5.940000 track 2 echo_ms 301
+5.980000 track 2 echo_ms 276
+6.000000 track 2 echo_ms 251
+6.040000 track 2 echo_ms 226
+6.080000 track 2 echo_ms 201
+6.100000 track 2 echo_ms 176
+6.120000 track 2 echo_ms 151
+6.160000 track 2 echo_ms 126
+6.200000 track 2 echo_ms 101
+6.240000 track 2 echo_ms 76
+6.260000 track 2 echo_ms 51
+6.300000 track 2 echo_ms 26
+6.340000 track 2 echo_ms 1
+6.360000 track 2 echo_ms 1
+6.380000 key -_(ZEHNERTASTATUR) up
+6.660000 key +_(ZEHNERTASTATUR) down
+6.660000 track 2 echo_ms 26
+7.160000 track 2 echo_ms 51
+7.200000 track 2 echo_ms 76
+7.240000 track 2 echo_ms 101
+7.260000 track 2 echo_ms 126
+7.300000 track 2 echo_ms 151
+7.340000 track 2 echo_ms 176
+7.360000 track 2 echo_ms 201
+7.400000 track 2 echo_ms 226
+7.440000 track 2 echo_ms 251
+7.460000 track 2 echo_ms 276
+7.500000 track 2 echo_ms 301
+7.520000 track 2 echo_ms 326
+7.580000 track 2 echo_ms 351
+7.600000 track 2 echo_ms 376
+7.640000 track 2 echo_ms 401
+7.660000 track 2 echo_ms 426
+7.700000 track 2 echo_ms 451
+7.720000 track 2 echo_ms 476
+7.760000 track 2 echo_ms 501
+7.780000 track 2 echo_ms 526
+7.840000 track 2 echo_ms 551
+7.860000 track 2 echo_ms 576
+7.900000 track 2 echo_ms 601
+7.920000 track 2 echo_ms 626
+7.960000 track 2 echo_ms 651
+7.980000 track 2 echo_ms 676
+8.040000 track 2 echo_ms 701
+8.060000 track 2 echo_ms 726
+8.100000 track 2 echo_ms 751
+8.120000 track 2 echo_ms 776
+8.160000 track 2 echo_ms 801
+8.180000 track 2 echo_ms 826
+8.240000 track 2 echo_ms 851
+8.260000 track 2 echo_ms 876
+8.300000 track 2 echo_ms 901
+8.320000 track 2 echo_ms 926
+8.340000 track 2 echo_ms 951
+8.380000 track 2 echo_ms 976
+8.380000 key +_(ZEHNERTASTATUR) up
+8.420000 key F up
+8.420000 track 2 note 65 off
+8.420000 key E up
+8.420000 track 2 note 63 off
+10.900000 key F down
+10.900000 track 2 note 65 on 0.800000012
+10.900000 key E down
+10.900000 track 2 note 63 on 0.800000012
+11.480000 key -_(ZEHNERTASTATUR) down
+11.480000 track 2 echo_ms 951
+11.980000 track 2 echo_ms 926
+12.020000 track 2 echo_ms 901
+12.040000 track 2 echo_ms 876
+12.080000 track 2 echo_ms 851
+12.120000 track 2 echo_ms 826
+12.140000 track 2 echo_ms 801
+12.180000 track 2 echo_ms 776
+12.200000 track 2 echo_ms 751
+12.240000 track 2 echo_ms 726
+12.280000 track 2 echo_ms 701
+12.300000 track 2 echo_ms 676
+12.340000 track 2 echo_ms 651
+12.380000 track 2 echo_ms 626
+12.400000 track 2 echo_ms 601
+12.440000 track 2 echo_ms 576
+12.480000 track 2 echo_ms 551
+12.520000 track 2 echo_ms 526
+12.540000 track 2 echo_ms 501
+12.580000 track 2 echo_ms 476
+12.600000 track 2 echo_ms 451
+12.640000 track 2 echo_ms 426
+12.660000 track 2 echo_ms 401
+12.700000 track 2 echo_ms 376
+12.740000 track 2 echo_ms 351
+12.780000 track 2 echo_ms 326
+12.800000 track 2 echo_ms 301
+12.840000 track 2 echo_ms 276
+12.860000 track 2 echo_ms 251
+12.900000 track 2 echo_ms 226
+12.940000 track 2 echo_ms 201
+12.960000 track 2 echo_ms 176
+13.000000 track 2 echo_ms 151
+13.040000 track 2 echo_ms 126
+13.080000 track 2 echo_ms 101
+13.100000 track 2 echo_ms 76
+13.140000 track 2 echo_ms 51
+13.160000 track 2 echo_ms 26
+13.200000 track 2 echo_ms 1
+13.220000 key -_(ZEHNERTASTATUR) up
+13.360000 key +_(ZEHNERTASTATUR) down
+13.360000 track 2 echo_ms 26
+13.860000 track 2 echo_ms 51
+13.880000 track 2 echo_ms 76
+13.920000 track 2 echo_ms 101
+13.960000 track 2 echo_ms 126
+14.000000 track 2 echo_ms 151
+14.020000 track 2 echo_ms 176
+14.060000 track 2 echo_ms 201
+14.080000 track 2 echo_ms 226
+14.120000 track 2 echo_ms 251
+14.140000 track 2 echo_ms 276
+14.200000 track 2 echo_ms 301
+14.220000 track 2 echo_ms 326
+14.260000 track 2 echo_ms 351
+14.280000 track 2 echo_ms 376
+14.320000 track 2 echo_ms 401
+14.360000 track 2 echo_ms 426
+14.380000 track 2 echo_ms 451
+14.420000 track 2 echo_ms 476
+14.460000 track 2 echo_ms 501
+14.500000 track 2 echo_ms 526
+14.520000 track 2 echo_ms 551
+14.560000 track 2 echo_ms 576
+14.580000 track 2 echo_ms 601
+14.620000 track 2 echo_ms 626
+14.640000 track 2 echo_ms 651
+14.680000 track 2 echo_ms 676
+14.700000 track 2 echo_ms 701
+14.760000 track 2 echo_ms 726
+14.780000 key +_(ZEHNERTASTATUR) up
+14.820000 key F up
+14.820000 track 2 note 65 off
+14.840000 key E up
+14.840000 track 2 note 63 off
+16.280000 key V down
+16.280000 track 2 tremolo on
+16.380000 key V up
+17.220000 key F down
+17.220000 track 2 note 65 on 0.800000012
+17.220000 key E down
+17.220000 track 2 note 63 on 0.800000012
+18.860000 key -_(ZEHNERTASTATUR) down
+18.860000 track 2 echo_ms 701
+19.360000 track 2 echo_ms 676
+19.400000 track 2 echo_ms 651
+19.420000 track 2 echo_ms 626
+19.460000 track 2 echo_ms 601
+19.480000 track 2 echo_ms 576
+19.520000 track 2 echo_ms 551
+19.560000 track 2 echo_ms 526
+19.600000 track 2 echo_ms 501
+19.620000 track 2 echo_ms 476
+19.640000 track 2 echo_ms 451
+19.680000 track 2 echo_ms 426
+19.720000 track 2 echo_ms 401
+19.740000 track 2 echo_ms 376
+19.780000 track 2 echo_ms 351
+19.820000 track 2 echo_ms 326
+19.860000 track 2 echo_ms 301
+19.900000 track 2 echo_ms 276
+19.920000 track 2 echo_ms 251
+19.940000 key -_(ZEHNERTASTATUR) up
+20.360000 key +_(ZEHNERTASTATUR) down
+20.360000 track 2 echo_ms 276
+20.860000 track 2 echo_ms 301
+20.900000 track 2 echo_ms 326
+20.940000 track 2 echo_ms 351
+20.960000 track 2 echo_ms 376
+21.000000 track 2 echo_ms 401
+21.020000 track 2 echo_ms 426
+21.080000 track 2 echo_ms 451
+21.100000 track 2 echo_ms 476
+21.140000 track 2 echo_ms 501
+21.160000 track 2 echo_ms 526
+21.200000 track 2 echo_ms 551
+21.220000 track 2 echo_ms 576
+21.260000 track 2 echo_ms 601
+21.280000 track 2 echo_ms 626
+21.340000 track 2 echo_ms 651
+21.360000 track 2 echo_ms 676
+21.380000 track 2 echo_ms 701
+21.420000 track 2 echo_ms 726
+21.460000 track 2 echo_ms 751
+21.500000 track 2 echo_ms 776
+21.520000 track 2 echo_ms 801
+21.560000 track 2 echo_ms 826
+21.580000 track 2 echo_ms 851
+21.620000 track 2 echo_ms 876
+21.660000 track 2 echo_ms 901
+21.700000 track 2 echo_ms 926
+21.720000 track 2 echo_ms 951
+21.760000 track 2 echo_ms 976
+21.780000 track 2 echo_ms 1001
+21.800000 track 2 echo_ms 1026
+21.860000 track 2 echo_ms 1051
+21.900000 track 2 echo_ms 1076
+21.900000 key +_(ZEHNERTASTATUR) up
+22.260000 key -_(ZEHNERTASTATUR) down
+22.260000 track 2 echo_ms 1051
+22.740000 track 2 echo_ms 1026
+22.800000 track 2 echo_ms 1001
+22.840000 track 2 echo_ms 976
+22.860000 track 2 echo_ms 951
+22.900000 track 2 echo_ms 926
+22.920000 track 2 echo_ms 901
+22.960000 track 2 echo_ms 876
+22.980000 track 2 echo_ms 851
+23.020000 key -_(ZEHNERTASTATUR) up
+23.080000 key F up
+23.080000 track 2 note 65 off
+23.080000 key E up
+23.080000 track 2 note 63 off
+25.500000 key E down
+25.500000 track 2 note 63 on 0.800000012
+25.500000 key G down
+25.500000 track 2 note 67 on 0.800000012
+26.460000 key -_(ZEHNERTASTATUR) down
+26.460000 track 2 echo_ms 826
+26.980000 track 2 echo_ms 801
+27.000000 track 2 echo_ms 776
+27.040000 track 2 echo_ms 751
+27.080000 track 2 echo_ms 726
+27.100000 track 2 echo_ms 701
+27.120000 track 2 echo_ms 676
+27.160000 track 2 echo_ms 651
+27.200000 track 2 echo_ms 626
+27.240000 track 2 echo_ms 601
+27.280000 track 2 echo_ms 576
+27.300000 track 2 echo_ms 551
+27.340000 track 2 echo_ms 526
+27.360000 track 2 echo_ms 501
+27.400000 track 2 echo_ms 476
+27.420000 track 2 echo_ms 451
+27.460000 key -_(ZEHNERTASTATUR) up
+27.780000 key +_(ZEHNERTASTATUR) down
+27.780000 track 2 echo_ms 476
+28.280000 track 2 echo_ms 501
+28.320000 track 2 echo_ms 526
+28.360000 track 2 echo_ms 551
+28.400000 track 2 echo_ms 576
+28.420000 track 2 echo_ms 601
+28.460000 track 2 echo_ms 626
+28.480000 track 2 echo_ms 651
+28.520000 track 2 echo_ms 676
+28.560000 track 2 echo_ms 701
+28.580000 track 2 echo_ms 726
+28.600000 track 2 echo_ms 751
+28.660000 track 2 echo_ms 776
+28.700000 track 2 echo_ms 801
+28.720000 track 2 echo_ms 826
+28.760000 track 2 echo_ms 851
+28.780000 track 2 echo_ms 876
+28.820000 track 2 echo_ms 901
+28.840000 track 2 echo_ms 926
+28.880000 track 2 echo_ms 951
+28.920000 track 2 echo_ms 976
+28.940000 key +_(ZEHNERTASTATUR) up
+29.380000 key G up
+29.380000 track 2 note 67 off
+29.400000 key E up
+29.400000 track 2 note 63 off
+30.660000 key E down
+30.660000 track 2 note 63 on 0.800000012
+30.800000 key E up
+30.800000 track 2 note 63 off
+31.400000 key E down
+31.400000 track 2 note 63 on 0.800000012
+31.420000 key A down
+31.420000 track 2 note 60 on 0.800000012
+32.340000 key -_(ZEHNERTASTATUR) down
+32.340000 track 2 echo_ms 951
+32.860000 track 2 echo_ms 926
+32.880000 track 2 echo_ms 901
+32.920000 track 2 echo_ms 876
+32.940000 track 2 echo_ms 851
+32.980000 track 2 echo_ms 826
+33.020000 track 2 echo_ms 801
+33.060000 track 2 echo_ms 776
+33.080000 track 2 echo_ms 751
+33.120000 track 2 echo_ms 726
+33.160000 track 2 echo_ms 701
+33.180000 track 2 echo_ms 676
+33.220000 track 2 echo_ms 651
+33.240000 track 2 echo_ms 626
+33.280000 track 2 echo_ms 601
+33.320000 track 2 echo_ms 576
+33.340000 track 2 echo_ms 551
+33.380000 track 2 echo_ms 526
+33.420000 track 2 echo_ms 501
+33.460000 track 2 echo_ms 476
+33.480000 track 2 echo_ms 451
+33.500000 track 2 echo_ms 426
+33.540000 track 2 echo_ms 401
+33.580000 track 2 echo_ms 376
+33.600000 track 2 echo_ms 351
+33.660000 track 2 echo_ms 326
+33.680000 track 2 echo_ms 301
+33.720000 track 2 echo_ms 276
+33.740000 track 2 echo_ms 251
+33.780000 track 2 echo_ms 226
+33.800000 track 2 echo_ms 201
+33.840000 track 2 echo_ms 176
+33.860000 key -_(ZEHNERTASTATUR) up
+34.060000 key +_(ZEHNERTASTATUR) down
+34.060000 track 2 echo_ms 201
+34.560000 track 2 echo_ms 226
+34.600000 track 2 echo_ms 251
+34.640000 track 2 echo_ms 276
+34.660000 track 2 echo_ms 301
+34.700000 track 2 echo_ms 326
+34.720000 track 2 echo_ms 351
+34.760000 track 2 echo_ms 376
+34.800000 track 2 echo_ms 401
+34.840000 track 2 echo_ms 426
+34.860000 track 2 echo_ms 451
+34.900000 track 2 echo_ms 476
+34.920000 track 2 echo_ms 501
+34.960000 track 2 echo_ms 526
+34.980000 track 2 echo_ms 551
+35.020000 track 2 echo_ms 576
+35.060000 track 2 echo_ms 601
+35.100000 track 2 echo_ms 626
+35.120000 track 2 echo_ms 651
+35.160000 track 2 echo_ms 676
+35.200000 track 2 echo_ms 701
+35.220000 track 2 echo_ms 726
+35.260000 track 2 echo_ms 751
+35.280000 track 2 echo_ms 776
+35.320000 track 2 echo_ms 801
+35.320000 key +_(ZEHNERTASTATUR) up
+35.380000 key E up
+35.380000 track 2 note 63 off
+35.380000 key A up
+35.380000 track 2 note 60 off
+36.840000 key E down
+36.840000 track 2 note 63 on 0.800000012
+37.260000 key H down
+37.260000 track 2 note 69 on 0.800000012
+38.460000 key -_(ZEHNERTASTATUR) down
+38.460000 track 2 echo_ms 776
+38.960000 track 2 echo_ms 751
+39.000000 track 2 echo_ms 726
+39.020000 track 2 echo_ms 701
+39.080000 track 2 echo_ms 676
+39.100000 track 2 echo_ms 651
+39.140000 track 2 echo_ms 626
+39.160000 track 2 echo_ms 601
+39.200000 track 2 echo_ms 576
+39.220000 track 2 echo_ms 551
+39.260000 track 2 echo_ms 526
+39.300000 track 2 echo_ms 501
+39.340000 track 2 echo_ms 476
+39.360000 track 2 echo_ms 451
+39.400000 track 2 echo_ms 426
+39.420000 track 2 echo_ms 401
+39.460000 track 2 echo_ms 376
+39.500000 track 2 echo_ms 351
+39.520000 track 2 echo_ms 326
+39.560000 track 2 echo_ms 301
+39.600000 track 2 echo_ms 276
+39.640000 track 2 echo_ms 251
+39.660000 track 2 echo_ms 226
+39.700000 track 2 echo_ms 201
+39.720000 track 2 echo_ms 176
+39.760000 track 2 echo_ms 151
+39.800000 track 2 echo_ms 126
+39.820000 track 2 echo_ms 101
+39.840000 key -_(ZEHNERTASTATUR) up
+40.060000 key +_(ZEHNERTASTATUR) down
+40.060000 track 2 echo_ms 126
+40.560000 track 2 echo_ms 151
+40.580000 track 2 echo_ms 176
+40.640000 track 2 echo_ms 201
+40.660000 track 2 echo_ms 226
+40.700000 track 2 echo_ms 251
+40.720000 track 2 echo_ms 276
+40.760000 track 2 echo_ms 301
+40.780000 track 2 echo_ms 326
+40.820000 track 2 echo_ms 351
+40.860000 track 2 echo_ms 376
+40.880000 track 2 echo_ms 401
+40.920000 track 2 echo_ms 426
+40.960000 track 2 echo_ms 451
+40.960000 key H up
+40.960000 track 2 note 69 off
+40.980000 key +_(ZEHNERTASTATUR) up
+40.980000 key E up
+40.980000 track 2 note 63 off
+43.000000 key F5 down
+43.000000 end

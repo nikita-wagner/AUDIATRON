@@ -20,7 +20,7 @@ typedef enum {
     AT_WAVE_SAW,        // PolyBLEP band-limited
     AT_WAVE_SQUARE,     // PolyBLEP band-limited
     AT_WAVE_TRIANGLE,
-    AT_WAVE_NOISE,
+    AT_WAVE_CIRCLE,
     AT_WAVE_COUNT
 } AT_Waveform;
 
@@ -67,13 +67,9 @@ static inline float oscillator_tick(AT_Oscillator* o, AT_Waveform wave) {
     case AT_WAVE_TRIANGLE:
         y = (float)(1.0 - 4.0 * fabs(t - 0.5));
         break;
-    case AT_WAVE_NOISE: {
-        uint32_t x = o->noise_state;            // xorshift32
-        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-        o->noise_state = x;
-        y = (float)x * (2.0f / 4294967296.0f) - 1.0f;
+    case AT_WAVE_CIRCLE:
+        y = (float)(sqrt(1.0 - (t - 0.5) * (t - 0.5) * 4.0) * 2.0 - 1.0);
         break;
-    }
     default:
         y = 0.0f;
         break;

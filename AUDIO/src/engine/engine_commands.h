@@ -24,8 +24,18 @@ enum {
     AT_CMD_SET_MASTER_VOLUME,   // f0 = volume
     AT_CMD_SET_LIMITER,         // i0 = enabled
     AT_CMD_SET_EQ_BAND,         // i0 = ch/-1, i1 = band, i2 = type, f0 = freq, f1 = q, f2 = gain_db
-    AT_CMD_SET_EQ_BYPASS        // i0 = ch/-1, i1 = bypass
+    AT_CMD_SET_EQ_BYPASS,       // i0 = ch/-1, i1 = bypass
+    AT_CMD_CANCEL,              // i0 = tag: drop waiting timed commands with it
+    AT_CMD_SET_CH_CLOCK         // i0 = ch, i1 = offset low 32 bits, i2 = high 32 bits
 };
 
-// Audio thread: drains the queue and applies every pending command.
+// Audio thread, at the start of every render call: applies the timed commands
+// that are due, then drains the queue (a command for a later frame waits in
+// e->timed, everything else is applied).
 void engine_apply_pending_commands(AT_Engine* e);
+
+// Audio thread: applies the timed commands due at e->frame_clock.
+void engine_apply_due_commands(AT_Engine* e);
+
+// Frames until the next timed command, at most `limit`.
+uint32_t engine_frames_to_next_command(const AT_Engine* e, uint32_t limit);

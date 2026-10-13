@@ -32,7 +32,13 @@ int app_run_offline(AT_App* app) {
         app_teardown(app);
         return 1;
     }
-    const uint32_t demo_channel = track->channel;
+    // the fusion track has no sound of its own: its demo plays the keyboard part
+    const bool     fusion       = app->fusion && (int)app->tracks.selected == app->fusion_track;
+    const uint32_t demo_channel = fusion ? app->tracks.tracks[app->fusion_keyboard_track].channel : track->channel;
+
+    // A player starts its file; other instruments get the built-in arpeggio.
+    const bool own_demo = track->instrument.demo_start != NULL;
+    if (own_demo) track->instrument.demo_start(track->instrument.self);
 
     AT_WavWriter wav;
     if (!wav_writer_open(&wav, o->offline_path, rate, AT_MAX_CHANNELS)) {
@@ -54,7 +60,7 @@ int app_run_offline(AT_App* app) {
     for (uint32_t done = 0; done < total; ) {
         // the "player": one note of the arpeggio at a time
         int want_step = (int)(done / step_frames);
-        if (want_step != step) {
+        if (!own_demo && want_step != step) {
             if (step >= 0) engine_note_off(&app->engine, demo_channel, k_arpeggio[step % ARPEGGIO_LENGTH]);
             step = want_step;
             engine_note_on(&app->engine, demo_channel, k_arpeggio[step % ARPEGGIO_LENGTH], DEMO_VELOCITY);
@@ -64,6 +70,7 @@ int app_run_offline(AT_App* app) {
         AT_Buffer buf = { .channels = AT_MAX_CHANNELS, .frames = n, .sample_rate = rate };
         for (int c = 0; c < AT_MAX_CHANNELS; c++) buf.ch[c] = mem[c];
 
+        app_background_tick(app);                       // what the control thread does live: replay lookahead, ...
         engine_render(&buf, &app->engine);
 
         for (uint32_t c = 0; c < buf.channels; c++)

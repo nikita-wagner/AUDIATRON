@@ -1,5 +1,7 @@
 #include "layers/layer_stack.h"
 
+#include <limits.h>
+
 #include "core/at_math.h"
 
 // ─── Setup (before the stack is plugged in) ──────────────────────────────────
@@ -17,9 +19,18 @@ AT_Layer* layer_stack_add(AT_LayerStack* s, const char* name, const AT_SourceTyp
     l->name = name;
     l->type = type;
     l->self = self;
+    l->note_low  = INT_MIN;
+    l->note_high = INT_MAX;
     channel_strip_init(&l->strip, s->sample_rate);
     l->strip.volume = 1.0f;         // a stack with one untouched layer sounds like the bare source
     return l;
+}
+
+bool layer_stack_set_range(AT_LayerStack* s, uint32_t layer, int low, int high) {
+    if (layer >= s->count || low > high) return false;
+    s->layers[layer].note_low  = low;
+    s->layers[layer].note_high = high;
+    return true;
 }
 
 bool layer_stack_set_insert(AT_LayerStack* s, uint32_t layer, uint32_t slot, AT_ProcessFn fn, void* user) {
@@ -28,19 +39,23 @@ bool layer_stack_set_insert(AT_LayerStack* s, uint32_t layer, uint32_t slot, AT_
     return true;
 }
 
-// ─── Notes: every layer gets every note ──────────────────────────────────────
+// ─── Notes: every layer gets every note in its key range ─────────────────────
+
+static bool in_range(const AT_Layer* l, int note) {
+    return note >= l->note_low && note <= l->note_high;
+}
 
 void layer_stack_note_on(AT_LayerStack* s, int note, float velocity) {
     for (uint32_t i = 0; i < s->count; i++) {
         AT_Layer* l = &s->layers[i];
-        if (l->type->note_on) l->type->note_on(l->self, note + l->transpose, velocity);
+        if (l->type->note_on && in_range(l, note)) l->type->note_on(l->self, note + l->transpose, velocity);
     }
 }
 
 void layer_stack_note_off(AT_LayerStack* s, int note) {
     for (uint32_t i = 0; i < s->count; i++) {
         AT_Layer* l = &s->layers[i];
-        if (l->type->note_off) l->type->note_off(l->self, note + l->transpose);
+        if (l->type->note_off && in_range(l, note)) l->type->note_off(l->self, note + l->transpose);
     }
 }
 

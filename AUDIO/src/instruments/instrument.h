@@ -39,4 +39,14 @@ typedef struct {
 
     // Short text for the status line, e.g. "oct 4 saw".
     void (*status)(void* self, char* out, size_t cap);
+
+    // Optional. What `--offline` should play on this instrument's track instead
+    // of the built-in arpeggio, e.g. a player starts its file. NULL = arpeggio.
+    void (*demo_start)(void* self);
+
+    // Optional. Called regularly on the control thread (every status tick
+    // live, before every block offline), whichever track is selected: for
+    // instruments that play by themselves, e.g. the drumpad's pattern sends
+    // its next hits ahead with engine_at.
+    void (*tick)(void* self);
 } AT_Instrument;

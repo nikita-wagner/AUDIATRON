@@ -14,11 +14,18 @@ audiatron --device 2 --exclusive    pick a device
 audiatron --info [--exclusive]      only negotiate the format and print it
 audiatron --backend winmm           use WinMM even where WASAPI exists (default: auto)
 audiatron --backend winmm --queue-ms 200     WinMM with a longer queue (if it crackles)
-audiatron --fx crush --fx tremolo   start with effects switched on
+audiatron --fx crush --fx tremolo   start with effects switched on (on the start track only)
 audiatron --track 2                 start on track 2 (piano + strings + synth layered)
 audiatron --offline out.wav 5       render a demo into a WAV file, no device needed
 audiatron --offline out.wav 5 --track 2      the same demo played on track 2
+audiatron --play song.mp3           add a player track for a WAV / MP3 file (play, pause, seek, loop, pitch)
+audiatron --sample kick.mp3         add a track that plays the file pitched across the piano keys
+audiatron --play song.mp3 --fx echo --pitch 3 --keep-tempo     echo on, 3 semitones up, same tempo
+audiatron --pad kick.mp3 --pad snare.wav --pad loop.mp3         a drumpad: one file per key, each pitched / looped on its own
+audiatron --replay recordings\rec_001.txt                        play an input recording back on the replay track
 ```
+
+Live: **F5** records every key and drum state into a text file, **F6** records a WAV, **F7** both at once (see *Recording and replay*).
 
 ---
 
@@ -43,8 +50,11 @@ src/
 │   └── biquad/               one filter stage (RBJ cookbook)
 │
 ├── synth/                  polyphonic synth = oscillator × ADSR × 32 voices
+├── sampler/                plays a decoded WAV / MP3: 8 voices, pitch, loop, play / pause / seek, part of a file
+│   ├── sampler.c             voices, transport, cubic-interpolated reading, rendering
+│   └── sampler_source.c      lets the engine use a sampler as a source
 ├── layers/                 LAYERS: several sources played together as ONE sound
-│   ├── layer_stack.c         per layer: source → inserts → volume/pan, all mixed
+│   ├── layer_stack.c         per layer: key range → source → inserts → volume/pan, all mixed
 │   └── layer_stack_source.c  lets the engine use a stack as a source
 ├── equalizer/              8-band parametric EQ = chain of biquads
 ├── mixer/
@@ -55,6 +65,8 @@ src/
 ├── effects/                one folder per effect, each depends on core only
 │   ├── bitcrusher/
 │   ├── tremolo/
+│   ├── echo/                 delay with feedback, damping, ping-pong
+│   ├── pitch_shift/          pitch change without speed change (granular)
 │   ├── soft_clip/            the master limiter
 │   └── _template/            ◄ copy this to start a new effect
 │
@@ -71,6 +83,11 @@ src/
 │   ├── instrument.h          the interface every instrument implements
 │   ├── keyboard_piano/       keys (…_keys.c) and sound (…_patch.c) kept apart
 │   ├── layered_keyboard/     piano + strings + synth layered; one table row per layer
+│   ├── sample_player/        a song / loop: transport keys, tape or keep-tempo pitch
+│   ├── sample_keyboard/      a file pitched across the piano keys (kick → bass line)
+│   ├── drumpad/              16 pads, one file each; per-pad pitch, loop, volume, pan, effects, cut
+│   ├── replay/               plays an input recording back, on time (the app plays it on copies of the tracks)
+│   ├── fusion/               two instruments on one keyboard: main keys → layers, numpad → drumpad
 │   └── _template/            ◄ copy this to start a drumpad, guitar, …
 │
 ├── input/
@@ -83,7 +100,17 @@ src/
 │   └── meter_bar/            level meter drawn with characters
 ├── io/
 │   ├── sample_format/        float → int16 / int24 / int32 / float32, interleaved
-│   └── wav_writer/           AT_Buffers → WAV file
+│   ├── wav_writer/           AT_Buffers → WAV file
+│   ├── audio_clip/           a sound file decoded into memory (AT_Clip), shared by all readers
+│   ├── wav_reader/           WAV → AT_Clip (8/16/24/32-bit, float, extensible, odd chunks)
+│   ├── mp3_reader/           MP3 → AT_Clip (uses third_party/minimp3)
+│   ├── audio_file/           one call that loads whichever format the file really is
+│   └── sound_folder/         the WAV / MP3 files of a folder, in name order (drumpad kits)
+├── recording/
+│   ├── event_log/            the input recording's text format: "seconds what", write and read
+│   └── wav_recorder/         engine output → lock-free ring (audio thread) → WAV file (control thread)
+├── third_party/
+│   └── minimp3/              public-domain MP3 decoder, unmodified (see its README.txt)
 │
 ├── backend/                the DEVICE only: find it, negotiate a format, exchange buffers
 │   ├── audio_backend.h       the contract every backend implements (AT_Backend)
@@ -110,6 +137,7 @@ src/
 │
 └── app/                    THE PROGRAM: the only folder that names concrete modules
     ├── app_instruments.c     ◄ register new instruments here (one track each)
+    ├── app_record.c          F5 / F6 / F7: input and WAV recording, loading the replay
     ├── app_effects.c         ◄ register new effects here
     ├── app_setup.c           engine + master sound + tracks + effects
     ├── app_keys.c            what a key does          (control thread callback)
@@ -130,10 +158,16 @@ Includes always carry the full path (`#include "effects/tremolo/tremolo.h"`), so
 | `dsp/*`, `effects/*`, `mixer/*` | `core/` only |
 | `synth/` | `core/`, `dsp/oscillator`, `dsp/envelope` |
 | `layers/` | `core/`, `mixer/channel_strip` |
+| `sampler/` | `core/`, `io/audio_clip` |
+| `io/wav_reader`, `io/mp3_reader` | `io/audio_clip` (the MP3 reader also `third_party/minimp3`) |
+| `io/audio_file` | `io/audio_clip`, `io/wav_reader`, `io/mp3_reader` |
+| `recording/event_log` | nothing |
+| `recording/wav_recorder` | `core/`, `io/wav_writer` |
 | `equalizer/` | `core/`, `dsp/biquad` |
 | `engine/` | `core/`, `equalizer/`, `mixer/*`, `effects/soft_clip` |
+| `app/` (recording, replay) | `recording/*`, `instruments/replay`, and the modules whose parameters it names (`app_params.c`) |
 | `tracks/` | `engine/`, `instruments/instrument.h` |
-| `instruments/*` | `engine/`, `input/key_event.h`, `input/piano_keys`, what their sound is built from (`synth/`, `layers/`, an effect) |
+| `instruments/*` | `engine/`, `input/key_event.h`, `input/piano_keys`, `input/key_names`, what their sound is built from (`synth/`, `layers/`, `sampler/`, `io/audio_file`, an effect); `instruments/replay` also `instruments/drumpad`, `recording/event_log` |
 | `backend/audio_backend.h` | `io/sample_format` (for the sample type enum) |
 | `backend/wasapi/`, `backend/winmm/` | `backend/audio_backend.h` |
 | `backend/select/` | both backends (the only place that names them) |
@@ -195,7 +229,11 @@ Keys in live mode (QWERTZ labels):
 | `,` / `.` | volume of the selected track |
 | `9` / `0` | mute / solo the selected track |
 | `Enter` | hold: the track's notes keep sounding after you release the keys, also while you play another track. `Enter` again stops them |
+| `C` / `V` / `F1` | crush / tremolo / echo on / off **for the selected track only** (every track has its own; on the drumpad track: for the held pad only) |
+| `E` + `+` / `-` | echo time of the track +/- 25 ms (hold to keep going); on the drumpad track also its pads' echoes |
 | `1`..`3` on track 2 | switch a layer on/off, also while notes sound |
+| `F5` / `F6` / `F7` | record input / WAV / both, on and off (works on every track) |
+| track 5 (fusion) | main keyboard → layers (track 2), numpad → drumpad (track 3), see *Fusion* |
 | `N` / `M`, `B`, `Space`, `Esc` | master volume, master EQ on/off, all notes off, quit |
 
 To hear tracks together: go to track 2, press `Enter`, play a chord, press `Tab`, play the piano over it.
@@ -207,6 +245,291 @@ Three contracts make everything pluggable (`core/at_buffer.h`, `core/at_module.h
 | an effect | `void fx_process(AT_Buffer* buf, void* user)` | `engine_set_hook(engine, point, channel, slot, fx_process, &state)` |
 | a sound generator | one `const AT_SourceType` (render + note handlers) | `engine_set_source(engine, channel, &MY_SOURCE, &state)` |
 | a live parameter | `void x_set_param(void* self, int param, float value)` | `engine_set_param(engine, x_set_param, &state, PARAM, value)` |
+
+### Playing WAV and MP3 files
+
+```
+audiatron --play song.mp3                     a player track (simple transport, for songs and loops)
+audiatron --sample kick.mp3                   a sampler track (the file on the piano keys)
+audiatron --play a.wav --play b.mp3 --sample kick.mp3      up to four files, each on its own track
+```
+
+Each file becomes a **track** after the built-in ones, so it has its own EQ, fader, pan, mute, solo and hold like the piano, and several files play together. The keyboard starts on the first file's track; **Tab** moves between tracks.
+
+**Player track** (`instruments/sample_player/`):
+
+| Key | Does |
+|---|---|
+| `P` | play / pause |
+| `S` | stop and rewind |
+| `L` | loop on / off |
+| `Left` / `Right` | seek 5 s back / forward (hold the key to keep going) |
+| `Up` / `Down` | pitch +1 / −1 semitone |
+| `Y` / `X` | speed −5 % / +5 % (the keys labelled Z and X on a US layout) |
+| `R` | reset pitch and speed |
+| `T` | switch between tape mode and keep-tempo mode |
+| `F1` | echo on / off for this track |
+
+**Sampler track** (`instruments/sample_keyboard/`): the piano keys play the file at the pitch of each key, several at once. The key for C in octave 4 plays the file unchanged. `Y` / `X` change the octave, `1` makes notes end when you let go of the key (otherwise a note plays to the end of the file), `2` loops it. Short sounds are what it is for: a kick becomes a bass line, a vocal "ah" becomes a choir.
+
+**Two ways to change the pitch**
+
+| | Tape mode (default) | Keep-tempo mode (`T`, `--keep-tempo`) |
+|---|---|---|
+| Pitch and speed | tied together, like a record: +12 semitones also plays twice as fast | separate: pitch changes alone, speed (`Y` / `X`) changes alone |
+| Done by | the sampler reading the file faster or slower (cubic interpolation) | the same, plus the pitch shifter (`effects/pitch_shift`) correcting it |
+| Accuracy | exact | the pitch is exact |
+| Sound | clean at any amount | slight flutter on music, strong flutter possible on a single steady tone (see below) |
+
+Measured through the whole program with a pure 440 Hz tone: tape mode at +12 / −12 / speed 1.5 gives 880.0 / 219.9 / 659.9 Hz; keep-tempo at +5 / −7 / +12 / −12 gives 587.2 / 293.7 / 880.0 / 220.1 Hz. With music (`sample/example.wav`) keep-tempo +5 shifted the whole spectrum by exactly +5.00 semitones and kept the loudness contour in time (correlation 0.89 at 100 ms resolution against 0.17 for tape +12, which changes the timing on purpose).
+
+**Known limit of keep-tempo mode:** the shifter overlaps two grains that are not phase-aligned. On music this is a slight flutter. On a single steady tone the grains can partly cancel depending on the tone's frequency: a pure 440 Hz sine with speed 1.5 or 0.75 in keep-tempo mode measured 1.5 % and 0.75 % off, because the main peak is replaced by sidebands about 7 Hz away. For sustained solo tones use tape mode.
+
+**Echo** (`effects/echo/`): 350 ms between repeats, each repeat 45 % of the last, 40 % level, a little darkening per repeat. The first repeat measures 0.40 of the original and the second 0.18 (0.40 × 0.45), as set. The echo tail keeps ringing after you stop. To change the other values edit `echo_setup` in `app/app_effects.c` (`_FEEDBACK`, `_MIX`, `_DAMPING`, `_PING_PONG` can also be sent while it runs with `engine_set_param`).
+
+**Echo time, live and from code.** Hold `E` and press `+` / `-` (main row or numpad): the echo of the track you are on gets 25 ms longer / shorter, from 1 ms up to the delay line's 2730 ms (at 48 kHz). It works while the echo is off too (it starts with that time), and a running echo glides there in ~0.15 s instead of jumping. On the drumpad track it sets the pads' own echoes as well; on the fusion track it acts on the layers track, or on the drumpad while a numpad pad is held. `E` itself still plays (a note, or pad 11), as when holding a pad to change it. The status line shows `[echo 375ms]`, and while `E` is held the time it changes. Recordings keep it (`track 1 echo_ms 375`, `pad 1 A echo_ms 225`) and the replay plays it.
+
+For a game, as whole milliseconds:
+
+```c
+int ms = echo_ms_for_distance(12.5f);            // a wall 12.5 m away: 73 ms (there and back at 343 m/s)
+app_set_echo_ms(app, track, ms);                 // a track's echo (and the drumpad's pads on its track)
+drumpad_set_echo_ms(&pads, pad, ms);             // one pad's echo
+echo_set_time_ms(&my_echo, ms);                  // an echo of your own, before it is plugged in
+engine_set_param(&engine, echo_set_param, &my_echo, AT_ECHO_PARAM_TIME, (float)ms);   // ... while it runs
+```
+
+Checked with a test through the app's key handler: `E` + `+` four times took the piano from 350 to 450 ms, `+` without `E` changed nothing, `E` + `-` (main row and numpad) went down, it stopped at 1 ms and at 2730 ms; a running echo followed to 375 ms; on the drumpad, a hit with its pad echo set to 600 ms came back 600.5 ms later (the half millisecond is the hit's own 5 ms fade-in reaching the detection level); `app_set_echo_ms(…, echo_ms_for_distance(34.3f))` set the pad's echo to 200 ms.
+
+**Effects are local.** Every effect (`C` crush, `V` tremolo, `F1` echo) exists once per track, sits on that track's channel and is switched for the selected track only; nothing acts on the master bus or on several tracks. An instance is made the first time it is switched on for a track (an echo is ~1 MB, so unused ones cost nothing). Checked by driving the app's own key handling: with crush, tremolo and echo on for the piano, a drumpad hit comes out bit-identical to one without them.
+
+**Files and memory.** WAV: 8 / 16 / 24 / 32-bit PCM and 32 / 64-bit float, any sample rate, mono or stereo (more channels: front left and right are kept); compressed WAVs are refused with a message. MP3: MPEG-1/2/2.5 Layer III, mono or stereo, constant or variable bit rate, with ID3 tags. Which format a file is gets decided by its content, not its name. A file is decoded completely into memory as 16-bit audio at load time: 2 bytes per sample, so a 3-minute stereo song at 44.1 kHz needs about 32 MB. That is fine here and a real limit on a small Windows 98 machine (use short or mono files there); streaming from disk is on the roadmap.
+
+### Drumpad
+
+```
+audiatron                                   the drumpad loads the "sample" folder by itself
+audiatron --pads D:\kits\808                every WAV / MP3 of a folder, in name order
+audiatron --pad "kick.mp3(250ms,1000ms)"    only 250..1000 ms of the file (750 ms, frame-exact)
+audiatron --pad "kick.wav(250ms,1000ms,2000ms,1000ms)"   that part, 2 s after a press, sounding for 1 s
+audiatron --pad "kick.mp3(0.5)"             only the first half of the file
+audiatron --pad "loop.wav(0.2,0.9)"         from 20 % to 90 % of the file (seconds: "loop.wav(0.5s,2s)")
+audiatron --pad kick.mp3 --pad snare.wav    single files, pad 1, 2, ...
+```
+
+**Started without any sound option** (`--play`, `--sample`, `--pad`, `--pads`), the program looks for a folder named `sample` (in the current folder, one or two folders up, then the same next to the executable, so `build\audiatron.exe` finds `AUDIATRON\sample`) and puts every WAV / MP3 in it on the pads in name order. It prints `drumpad: 4 sound(s) from "…"` and the keyboard starts on the drumpad track. A file that does not decode is skipped with a message.
+
+Every `--pad` file goes on the next pad, then the `--pads` folder fills the remaining pads (up to 16 in all); all pads share **one** drumpad track, after the `--play` / `--sample` tracks. The folder listing is `io/sound_folder/` (`FindFirstFileA`, so it works on Windows 98 too). Each pad is one key and has its **own** pitch, loop, volume, pan and pitch mode.
+
+```
+ pads   A S D F G H J K        pads 1..8    (the first 8 --pad files)
+        Q W E R T Z U I        pads 9..16   (QWERTZ labels; the help text prints your layout's labels)
+```
+
+Hold a pad and press a control key to change **that** pad. Hold several pads to change them together. A control key with **no pad held does nothing**, so a change never lands on a pad you did not mean. To change a running loop, hold its key: a press used for a change does not stop the loop.
+
+| Key (while holding a pad) | Does |
+|---|---|
+| `+` / `-` | pitch +1 / −1 semitone, ±24 (also numpad `+` / `-`, and `=` / `-` on a US keyboard). Hold to keep going |
+| `Up` / `Down` or `,` / `.` | volume of this pad (on the drumpad track `,` `.` are not the track volume) |
+| `Left` / `Right` | pad pan |
+| `L` | loop on / off |
+| `P` | tape ↔ keep-tempo pitch, for this pad |
+| `C` / `V` / `F1` | crush / tremolo / echo **on this pad only** (on the drumpad track they are not the global effects) |
+| `X` | sync: the pad runs on the shared clock (default) or free (its own clock) |
+| `/` | timing: type start, end (the part of the file), wait and play for, in ms (see below) |
+| `*` | the pattern (step sequencer): no pad needs to be held (see *Pattern* below) |
+| `Backspace` | reset the pad: pitch 0, tape, volume 1, centre, effects off |
+
+- **One-shot pad** (default): a press plays the file to its end; pressing again restarts it. Pitch changes reach a hit that is still sounding.
+- **Looped pad**: a press starts the loop, the next press stops it. A press that was used to change the pad (hold `A`, press `+`) does **not** stop it. Hold a pad and press `L` to start looping it right away; `L` again lets it finish its current pass and stop. `Space` stops every loop.
+- Loops keep running when you `Tab` to another track, like a player track's song.
+- Pitch modes work as on the player (below): **tape** (default) is exact and clean, a pitched-up loop also gets faster; **keep tempo** keeps a loop in time but adds the shifter's slight flutter and softens drum transients a little.
+
+How it is built: each loaded pad is a sampler (`sampler/`) with its own pitch shifter as a layer insert, and the pads are the layers of one layer stack (`layers/`), each layer answering only its own note: pad 1 = note 36, pad 2 = 37, … (where the General MIDI drum notes start). From code:
+
+```c
+drumpad_init(&pads, sample_rate);
+drumpad_load(&pads, 0, "kick.mp3", error, sizeof error);      // before attach
+track_list_add(&tracks, drumpad_instrument(&pads));
+drumpad_set_pitch(&pads, 0, -3.0f);                           // any time afterwards
+drumpad_hit(&pads, 0, 1.0f);                                  // = engine_note_on(engine, channel, 36, 1.0f)
+drumpad_loop_start(&pads, 1);
+```
+
+**Synced and free pads (the clock).** The drumpad has one shared clock. Each pad is either **synced** (default) or **free** (`X` while holding it, `drumpad_set_sync(&pads, pad, false)` from code):
+
+| | synced | free |
+|---|---|---|
+| Clock | the drumpad's one shared clock | its own, starting when the pad starts |
+| Starting a loop | the first synced loop starts the clock (from its top); a synced loop started later drops in where it would be had it started with the clock, so all synced loops stay phase-locked, however late you press them | from its top, the moment you press it |
+| Tremolo LFO | runs on the shared clock (in phase with the other synced pads) | starts its cycle when the pad starts |
+
+So pads 1 and 3 can be locked while pad 2 runs free. When no synced loop is playing, the next synced loop restarts the clock. One-shot hits always play the moment you press them. A synced loop pitched in tape mode plays faster or slower and so leaves the clock's phase; keep-tempo pitch (`P`) keeps it locked. Measured with the test program: a synced loop pressed 0.25 s after the first one starts at exactly the clock's phase, and 3 s later both are still on it to the sample; a free loop started meanwhile counts from its own start; a synced loop stopped and pressed again re-joins in phase.
+
+**Every pad is its own layer**: its own volume, pan, pitch, effects and clock. Each pad renders into its own buffer, runs its pitch shifter and effects there, and only the finished result is added to the shared output buffer; no part of one pad's processing touches another's. (Running each pad on its own thread would not separate them further, since that state is already separate, but it would add latency and timing jitter between pads and gives nothing on a single-CPU Windows 98 machine.) An echo on the snare leaves the kick dry, and each pad's echo tail is its own. The effects sound like the global ones (same settings, in `drumpad_effects.c`) and sit in the pad's layer after its pitch shifter. From code: `drumpad_set_fx(&pads, 1, AT_PAD_FX_ECHO, true)`, `drumpad_set_volume(&pads, 1, 0.5f)`.
+
+**A pad's timing (`/`): which part, when, how long.** Hold a pad, press `/`, and type four values in milliseconds, Enter after each:
+
+```
+hold F, /         status line:  F 1/4 start ms (file 2350): _
+2 5 0 Enter                     F 2/4 end ms (250.., now 2350): _
+1 0 0 0 Enter                   F 3/4 wait ms before it plays (now 0): _
+2 0 0 0 Enter                   F 4/4 play for ms (0 = part length, now 0): _
+1 0 0 0 Enter                   F ... 250-1000ms wait2000 for1000
+```
+
+| Value | Example | What it does |
+|---|---|---|
+| start, end | 250, 1000 | the part of the file that plays (750 ms here) |
+| wait | 2000 | after a press (or a loop start), silence this long, then it plays |
+| play for | 1000 | it sounds this long: shorter than the part = cut off (5 ms fade), longer = silence after the part; 0 = as long as the part. **A looped pad repeats every "play for"**, also when that is longer than the sample: a 400 ms kick with play for 1000 sounds 400 ms, is silent 600 ms, sounds again |
+
+So the example plays, 2 s after the press, 250..1000 ms of F's file, then is silent until 1 s has passed; looped, again every 1 s (at 2, 3, 4 s ...). Pads with the same "play for" loop in step whatever their files, and a synced pad joining late lands on the same repetitions. Times are real time (a pitched pad keeps its rhythm) and frame-exact: in the test, the example started on frame 96000 (2.000 s), a 400 ms sample looped every 1000 ms repeated at frames 48000 and 96000, and with a 500 ms wait at 24000 and 72000; from the command line the sound started at 2.000, 3.000 and 4.000 s.
+
+An empty Enter keeps a value, so `250 Enter 1000 Enter Enter Enter` only cuts and `Enter Enter 2000 Enter 1000 Enter` only times; `0` switches wait / play for off. From code: `drumpad_set_cut_ms(&pads, pad, 250, 1000); drumpad_set_timing(&pads, pad, 2000, 1000);` In a recording: `pad 4 F timing 2000ms 1000ms`. It lives in the sampler (`AT_SAMPLER_PARAM_DELAY_MS` / `_LENGTH_MS`), so any sampler-based instrument can use it.
+
+`/` is found by the character it types: Shift+7 on a German keyboard, `/` on a US one, the numpad `/` on both. Digits from the number row or the numpad; Backspace deletes; Esc cancels everything. While you type, the keys do nothing else (a digit never plays a pad). A start outside the file or an end before the start is refused with a note in the status line.
+
+The cut is in **milliseconds, frame-exact**: the sampler turns them into frames itself (`AT_SAMPLER_PARAM_REGION_FROM_MS` / `_TO_MS`), so 750 ms is 36000 frames at 48 kHz in every file. Pads cut to the same length therefore loop in step for ever, even when their files have different lengths: in the test, a pad cut to 0..300 ms of a 400 ms file and one cut to 100..400 ms of a 600 ms file were still exactly 100 ms (4800 frames) apart after 10 s of looping, and a 250..1000 ms cut was at file frame 45600 after 700 ms and stopped on the frame at 750 ms. From code: `drumpad_set_cut_ms(&pads, pad, 250.0f, 1000.0f)`; in a recording: `pad 4 F cut 250ms 1000ms`.
+
+**Part of a file** (one-shot and loop): `drumpad_set_cut(&pads, 0, 0.0f, 0.5f)` plays the first half, `(0.2f, 0.9f)` from 20 % to 90 %. The same works for player and sampler tracks: `sample_player_set_cut`, `sample_keyboard_set_cut`, and on the command line after any `--play` / `--sample` / `--pad` file: `FILE(TO)`, `FILE(FROM,TO)`, numbers are fractions of the length, with `ms` milliseconds, with `s` seconds (a pad cut given in `ms` or `s` is set frame-exact, as with `/`). One function covers WAV and MP3; the format is found from the file. In PowerShell put the argument in quotes. A cut edge in the middle of a sound fades over 5 ms, and a cut loop dips for 5 ms at its seam, so neither clicks; the whole file (0..1) plays exactly as before. This lives in the sampler (`AT_SAMPLER_PARAM_REGION_FROM` / `_TO`), so every sampler-based instrument has it.
+
+`--offline` with pads starts every pad looping at once. Memory: the file plus about 64 KB (its pitch shifter) per loaded pad, plus about 1 MB for a pad's echo, allocated only the first time echo is switched on for that pad.
+
+Checked with a test program that drives the real engine with simulated key presses and measures the output (440 / 660 Hz test tones): hits reach only their own pad; +12 on a held pad gives 880.0 Hz while the other pad stays at 660.1 Hz; a looped pad keeps sounding past the end of its file; `+` on a held, looping pad pitches it (740.8 Hz) without stopping it; the next plain press stops it, and so does all-notes-off; `L` off finishes the pass; pan and reset work. Also checked: `,` on a held pad halves that pad's level (measured 0.500 of the other pad), echo on one pad rings past the end of its file while the other pad stays dry, crush on one pad leaves the other bit-identical, a pad cut to (0, 0.5) stops at 0.5 s of a 1 s file, and neither a cut end nor a cut loop seam steps further between two samples than the test tone itself does. Not checked by ear or by playing it live in the console.
+
+**Not verified by listening.** Everything above was checked with measurements (frequency, level, timing, click detection), not by ear. Judge the sound of the keep-tempo mode and of the echo yourself.
+
+### Pattern: a step sequencer (`*`)
+
+A grid of bits over the pads: **row 1 is pad 1, row 2 pad 2 ...; every column is one step**. A `1` plays that row's pad on that step, a `0` is a rest. Every step lasts the step time, and the pattern loops.
+
+`*` is Shift+`+` on a German keyboard (or the numpad `*` on the drumpad track). The first time it asks three things on the status line:
+
+```
+*                     * pattern size rows x steps (now 4x4): _
+4x4 Enter             * step time ms or s (now 1000, 0 = stop, 8x4 = size): _
+500 Enter             (the grid is printed)  * row 1/4 A kick.wav (now 0000): _
+1010 Enter            * row 2/4 S snare.wav (now 0000): _
+0101 Enter            ...
+1000 Enter
+0001 Enter            → playing:   pattern playing: 4 x 4, 500 ms per step
+                                     1 A   kick.wav     1010
+                                     2 S   snare.wav    0101
+                                     3 D   hat.wav      1000
+                                     4 F   (no sound)   0001
+```
+
+Once a pattern exists, `*` only asks the step time and then shows every row again to fill (each row with its current bits; an empty Enter keeps it). To change the size, type it at the step time (`8x4`).
+
+- Size: `4x4` (also `4*4`, `4,4`), up to 16 rows (pads) and 32 steps. Empty Enter keeps it.
+- Step time: `500` = 500 ms, `0.5s` = half a second; plain numbers below 10 are seconds (`0.5`). From 20 ms to 60 s. `0` stops the pattern (it is kept).
+- Rows: one `0` / `1` per step; fewer = the rest are `0`. Backspace deletes, Esc cancels everything (the old pattern stays).
+- Finishing starts it; `Space` stops it like everything else. The status line shows `pat 4x4 3/4` while it plays.
+- A hit is an ordinary pad hit, so it uses the pad's pitch, cut, wait / play for and effects, and recordings log it (on its exact frame). Set "play for" to the step time to make every hit last exactly one step.
+
+The hits are sent 250 ms ahead with their engine frame (`engine_at`), like the replay's lines, so every step lands on its sample: in the test, steps of 500 ms started on frames +0, +24000, +48000, +72000 with the right pad on each, and recorded hits came out exactly 0.500000 s apart. From code:
+
+```c
+uint32_t beat[2] = { 0x5, 0xA };          // row 1: steps 1 and 3; row 2: steps 2 and 4 (bit 0 = step 1)
+drumpad_pattern_set(&pads, 2, 4, beat, 500.0f);
+drumpad_pattern_play(&pads);
+drumpad_pattern_stop(&pads);
+```
+
+On the fusion track, Shift+`+` opens the drumpad's pattern too (the numpad `*` is pad 13 there).
+
+### Fusion: keyboard and numpad together
+
+The fusion track (track 5 with the default kit: piano, layers, drumpad, replay, fusion) plays two instruments at once: the **main keyboard plays the layered keyboard** (track 2: piano + strings + synth) and the **numpad plays the drumpad** (track 3). It has no sound of its own; it plays those tracks, so their volume, effects and settings apply, and a recording logs the notes and hits on tracks 2 and 3 (and the replay plays them back there).
+
+```
+ numpad:   7  8  9  -          pads  7  8  9  14
+           4  5  6  +                4  5  6  15
+           1  2  3  Enter            1  2  3  16
+           0     .                   10    11          /  = pad 12    *  = pad 13
+```
+
+| While you hold a numpad pad | Does |
+|---|---|
+| `+` / `-` (main keys) | pitch of that pad |
+| arrows, `,` / `.` | volume / pan of that pad |
+| `L`, `P`, `X` | loop, keep tempo, sync of that pad |
+| `C` / `V` / `F1` | crush / tremolo / echo on that pad |
+| `/` | the cut editor for that pad (digits from the numpad work) |
+| `Backspace` | reset that pad |
+| a letter | still a note on the layers (a letter never hits a drum here) |
+
+With no pad held, every key except the numpad is the layered keyboard's (`1`–`3` layers on/off, `Y` / `X` octave), and the track keys `,` `.` `9` `0` `Enter` `C` `V` `F1` act on the layers track (track 2), not on the fusion track itself.
+
+The numpad is told apart from the arrows, Enter and the main-row `-` by the console's "enhanced key" flag (`AT_KeyEvent.extended`): numpad 8 and the Up arrow have the same scan code. So it works with NumLock on or off. Checked with a test through the app's key handler: main A gave note 60 on the layers channel and no drum hit, numpad 1 / 2 gave pad notes 36 / 37 (numpad 2 also without a typed character, i.e. NumLock off), holding numpad 1 made the Up arrow and `+` / `-` / `C` / `,` change pad 1, while numpad 8 (Up's code) stayed a pad; with no pad held `,` / `V` / `Enter` changed the layers track; the cut editor took 250 / 750 typed on the numpad; a recording on the fusion track had `track 2 note 60 on` and `pad 1 A hit 1`.
+
+### Recording and replay
+
+| Key | Records | File |
+|---|---|---|
+| `F5` | input: every key and every drum state, as text | `recordings\rec_001.txt` |
+| `F6` | audio: exactly what goes to the speakers | `recordings\rec_001.wav` |
+| `F7` | both, started and stopped on the same frame | both, same number |
+
+Press the same key again to stop. Input and WAV can also be started and stopped separately (`F5` while `F6` runs: the text joins the running take's number). Takes are numbered; an existing file is never overwritten. `--record-dir DIR` saves elsewhere. The status line shows `REC in 0:12 wav 0:12` while recording.
+
+**The input file** is plain text, one event per line, `seconds what`:
+
+```
+# AUDIATRON input recording. One event per line: seconds since the start, then what happened.
+audiatron recording 1
+rate 48000
+pad 1 A file C:\AUDIATRON\sample\kick.wav        ← the sounds on the pads (full paths)
+pad 2 S file C:\AUDIATRON\sample\loop.mp3
+0.000000 pad 1 A pitch +0                         ← the state of every pad at the start
+0.000000 pad 2 S sync on
+...
+0.000000 wav start recordings\rec_001.wav         ← where the WAV begins, on this time line
+0.100000 key A down                               ← what you pressed ...
+0.100000 pad 1 A hit 1                            ← ... and what the drumpad did
+0.100000 key A up
+0.350000 pad 2 S loop start                       ← a loop starts here
+0.800000 pad 1 A pitch +3                         ← pitched
+0.800000 pad 1 A echo on                          ← an effect switched
+1.500000 pad 2 S crush on
+2.000000 pad 2 S loop stop                        ← the loop ends here
+2.300000 all notes off
+2.600000 end
+```
+
+**Every track is recorded**, not only the drums. The header says what each track is (`track 1 piano`, `track 2 layers`, `track 3 player file C:\music\song.mp3`, `track 4 drumpad`), the first lines at time 0 hold the state of everything, and then:
+
+```
+1.050000 track 1 note 60 on 0.800000012     ← piano: a note starts ...
+1.300000 track 1 note 60 off                ← ... and ends
+1.300000 track 1 synth wave 1               ← the piano's waveform (key 2)
+1.550000 track 2 layers 2 mute 1            ← layered keyboard: layer 2 (strings) off
+1.550000 track 2 note 67 on 0.800000012     ← a chord note on the layers
+0.100000 track 3 sampler play               ← the song starts
+0.350000 track 3 sampler rate 1.05946314    ← pitched up a semitone (tape mode)
+0.350000 track 3 shifter ratio 1            ← (keep-tempo mode uses the shifter)
+1.550000 track 2 volume 0.9                 ← track volume, mute / solo / hold, crush / tremolo / echo
+```
+
+These lines come from the engine itself: every note and every parameter change an instrument sends (to its synth, layer stack, sampler or pitch shifter) is seen there (`engine_set_observer`) and written with its track. So a new instrument built from these modules is recorded without any extra code. Drum lines: `pad N K tempo on/off`, `volume 0.8`, `pan -0.2`, `tremolo on/off`, `sync on/off`, `cut 0.2 0.9`, `loop on/off`, `reset`. The app's own changes: `track 3 select drumpad`, `master volume 0.9`, `all notes off`. Values are written with 9 digits, so the replay sets exactly the same numbers; times have 6 decimals, so every event goes back on its exact frame.
+
+**The replay track** (track 4) plays such a file back: `P` play from the start / stop, `L` loop the recording, **`Left` / `Right` (or `Up` / `Down`) the previous / next recording** in the same folder (all `.txt` files, in name order, wrapping around; the status line shows `rec_002.txt 2/5`). Switching while it plays goes straight on with the new one; a new `F5` recording appears in the list at once. When an input recording stops it is loaded there automatically; `--replay FILE` loads one at start (and selects the track).
+
+It plays **everything on copies of the tracks**: every melodic track (piano, layers, players, sampler keyboards) has a copy on the engine channel 8 above its own (players share the decoded file with their copy), and the drums play on the replay's own drumpad, on the replay track's channel. So your live tracks stay free: play over your own take, on the same instruments, and record that as the next take. A copy gets the recorded track's volume, pan, mute / solo, hold and effects too.
+
+- `key`, `track N select` and `master` lines are there to read; everything else is played.
+- The recording's tracks are matched to this program's by kind and file, not only by number: with the tracks in another order the parts still find their instrument; a part with no matching track (a song that is not loaded) is reported and skipped.
+- Sample-accurate: the audio block is split at every event, so `0.500250 pad 1 hit` sounds from frame 24012 at 48 kHz, not from the nearest block.
+- You can write or edit a recording by hand. The key label may be left out (`0.5 pad 1 hit`), lines do not have to be in order, `# ...` is a comment.
+- From code: `drumpad_set_observer(&pads, fn, user)` reports every change as an `AT_PadEvent`, `drumpad_event_format` / `drumpad_event_parse` turn it into text and back, `drumpad_event_apply` replays one, `drumpad_snapshot` gives the current state as events.
+
+**How the timing works.** The replay sends every line 250 ms before it is due, from the control thread, with its exact engine frame (`engine_at`); the engine keeps such commands waiting and splits the audio block at their frame. LFOs that run on the engine clock (the strings layer's tremolo, a track's tremolo) run on a copy as they did in the take: the recording stores its start frame (`clock`) and the copy's channel clock is shifted by that much (`engine_set_channel_clock`).
+
+**Checked** with a test program that drives the app's own key handling, one take on every kind of track: a song started and pitched up on a player track, a drum hit and a drum loop, two piano notes with a waveform change between them, the layered keyboard with a layer switched off, its track volume raised and a three-note chord, the drum loop stopped. Recorded with `F7`, loaded into the replay track by itself, played back on the copies while `F6` recorded it: the replay's WAV equals the take's WAV to within 1 of 32768 over the whole take (before the channel clock shift, the strings tremolo made it 7). Earlier drum-only take: also within 1. A hand-written file with events at 0.500250 s and 1.000500 s (off the audio block grid) started its sounds on frames 24012 and 48024 exactly, and its `pitch +12` gave 880 Hz.
+
+**Limits.** A logged time is when the key arrived, so it can be up to one device period earlier than the sound changed (10 ms in WASAPI shared mode, 3 ms exclusive, the WinMM period on WinMM); the replay plays it exactly at the logged time. Notes held down when the recording starts are not in it; a song already playing is (from its position), drum loops already running restart from their beginning. The master volume and master EQ are logged but not replayed (they belong to everything that plays now). The replay's drums use the replay track's channel, so the recorded drum track's volume and effects are applied there. If the control thread stalls longer than 250 ms (a window being dragged), lines arrive late and play at once. Not tried live in the console; the test drives the same key handler.
 
 ### Two backends, one engine
 
@@ -246,6 +569,8 @@ What is in place and checked on this (Windows 11) machine:
 - The engine's own code in that build calls 35 Windows functions, all of them present in Windows 98, all in their ANSI form (`ReadConsoleInputA`, `CreateEventA`, `waveOutGetDevCapsA`, …). The W variants are empty stubs on Windows 95/98/Me.
 - Real-time priority comes from `avrt.dll` if it can be loaded at run time, otherwise from `SetThreadPriority`. The program no longer needs that DLL to start.
 - A 32-bit build with SSE switched off (`/arch:IA32`) contains no SSE instructions, so it would run on Pentium- and K6-class CPUs.
+- The WAV and MP3 loading is plain C (the MP3 decoder is built with its SIMD code switched off) and compiles in the GCC build for Windows 98 (`build_win98.bat`) without warnings. Rendering a file through that build gave the same audio as the Visual Studio build, to within 2 of 32768 steps (about −84 dB) including the MP3 decoding, the pitch shifter and the echo.
+- The echo needs about 1 MB of memory and each player about 64 KB for its pitch shifter, on top of the decoded files.
 
 What is still open:
 
@@ -255,7 +580,7 @@ What is still open:
   gcc -std=gnu11 -O2 -march=pentium -DAT_NO_WASAPI -Isrc <every .c under src except backend/wasapi> -o audiatron.exe -lwinmm -luser32
   ```
 - **Speed on old CPUs is unmeasured.** The synth computes every sample in floating point; start with `--rate 22050 --queue-ms 200` on slow machines.
-- `../WINMM/winmm.h` is unchanged. Its WAV playback is not part of this engine yet (roadmap: `sampler/`).
+- `../WINMM/winmm.h` is unchanged. This engine now plays WAV and MP3 files through `sampler/`; the SIMD sample converters of `winmm.h` are not used (the new WAV reader is plain C).
 
 ---
 
@@ -266,22 +591,23 @@ What is still open:
 1. Copy `src/effects/_template/` to `src/effects/delay/`, rename the two files to `delay.h` / `delay.c`.
 2. Rename `AT_TemplateEffect` / `template_effect_*` to `AT_Delay` / `delay_*`.
 3. Put parameters and memory into the struct, the DSP into `delay_process()`.
-4. In `src/app/app_effects.c`: include the header, add `static AT_Delay s_delay;`, then in `app_effects_setup`:
+4. In `src/app/app_effects.c`: include the header, write a setup function, then add a row in `app_effects_setup`:
    ```c
-   delay_init(&s_delay, sample_rate, 0.25f);
-   add(app, "delay", AT_SC_F1, AT_HOOK_CHANNEL, 0, 1, delay_process, &s_delay);
+   static void delay_setup(void* state, float sample_rate) { delay_init((AT_Delay*)state, sample_rate, 0.25f); }
+   ...
+   add(app, "delay", AT_SC_F2, 3, delay_process, sizeof(AT_Delay), delay_setup);    // slot 3 = after the echo
    ```
-   That gives it a hotkey, a status line label and `--fx delay`.
+   That gives it a hotkey that switches it per track, a status line label and `--fx delay`. Each track gets its own instance on first use.
 5. `build.bat`. Test without a device: `audiatron --offline test.wav 3 --fx delay`.
 
-### A new instrument (e.g. `drumpad`)
+### A new instrument (e.g. `guitar`)
 
-1. Copy `src/instruments/_template/` to `src/instruments/drumpad/`, rename the files and the `template_instrument_*` names. The template already is a working 4-pad instrument.
+1. Copy `src/instruments/_template/` to `src/instruments/guitar/`, rename the files and the `template_instrument_*` names. The template already is a working 4-pad instrument.
 2. Fill in the key table (playing) and `attach` (sound).
-3. In `src/app/app_instruments.c`: include the header, add `static AT_Drumpad s_drumpad;`, then:
+3. In `src/app/app_instruments.c`: include the header, add `static AT_Guitar s_guitar;`, then:
    ```c
-   drumpad_init(&s_drumpad, sample_rate);
-   track_list_add(&app->tracks, drumpad_instrument(&s_drumpad));
+   guitar_init(&s_guitar, sample_rate);
+   track_list_add(&app->tracks, guitar_instrument(&s_guitar));
    ```
    It gets its own track (the next free mixer channel). **Tab** selects the track the keyboard plays.
 
@@ -306,15 +632,24 @@ AT_Layer* low = layer_stack_add(&stack, "low", &AT_SYNTH_SOURCE, &synth_a);
 low->transpose    = -12;
 low->strip.volume = 0.6f;
 layer_stack_add(&stack, "high", &AT_SYNTH_SOURCE, &synth_b);
+layer_stack_set_range(&stack, 1, 60, 127);                            // "high" only plays from C4 up (a split)
 layer_stack_set_insert(&stack, 1, 0, tremolo_process, &tremolo);     // effect on "high" only
 engine_set_source(engine, channel, &AT_LAYER_STACK_SOURCE, &stack);
 ```
 
 While it plays, change a layer with `engine_set_param(engine, layer_stack_set_param, &stack, AT_LAYER_PARAM(1, AT_LAYER_PARAM_MUTE), 1.0f)`.
 
-### A new sound generator (e.g. a sampler)
+### A new sound generator
 
-Create `src/sampler/`, write the DSP, then one adapter file like `synth/synth_source.c` that fills an `AT_SourceType`. Any instrument can then own a sampler instead of a synth. The engine needs no change.
+Create a folder (like `src/sampler/`), write the DSP, then one adapter file like `synth/synth_source.c` that fills an `AT_SourceType`. Any instrument can then own it instead of a synth or a sampler. The engine needs no change.
+
+### A sampler-based instrument
+
+Copy `instruments/sample_keyboard/` (it is the smallest sampler instrument): it owns an `AT_Clip` and an `AT_Sampler`, plugs the sampler in with `engine_set_source(engine, channel, &AT_SAMPLER_SOURCE, &sampler)`, and turns key events into `engine_note_on` / `engine_note_off`. For several sounds in one instrument, see `instruments/drumpad/`: one sampler per sound, each a layer of one stack with a one-note key range.
+
+### A new file format (OGG, FLAC, ...)
+
+Write `io/<format>_reader/` with one function of the shape `bool x_load(const char* path, AT_Clip* out, char* error, size_t cap)` (see `io/wav_reader/wav_reader.h`), then add it to `io/audio_file/audio_file.c`. Every `--play` and `--sample` file, and everything built on `audio_file_load`, then understands the format.
 
 ### A new backend (e.g. DirectSound)
 
@@ -343,6 +678,18 @@ Edit `instruments/keyboard_piano/keyboard_piano_patch.c`. Key handling is in `ke
 | Notes hang or get cut off | is the track on hold (`hold` in the status line)? Then `synth/synth_voices.c`, `dsp/envelope/adsr.c` |
 | A track is silent | `mute` / `solo` in the status line, then `tracks/track_list.c` (`track_is_audible`) |
 | A layer is missing, too loud or out of tune | the table in `instruments/layered_keyboard/layered_keyboard_patch.c`, then `layers/layer_stack.c` |
+| A WAV / MP3 will not load | the message after `cannot load "…"`; the reader is `io/wav_reader` or `io/mp3_reader`, the dispatch `io/audio_file` |
+| A recording is missing events | they are written by `app/app_record.c` (keys, app changes) and the drumpad's observer (`instruments/drumpad/drumpad_events.c`); every `drumpad_*` call reports one event |
+| A replay sounds different from the take | `instruments/replay/replay_render.c` (events on frames), `instruments/replay/replay.c` (which lines are loaded) |
+| A WAV recording has gaps (`some audio was lost`) | the control thread fell more than ~2.7 s behind; `recording/wav_recorder/` (`AT_WAV_RECORDER_FRAMES`) |
+| A pad plays the wrong sound, or two pads at once | the key ranges set in `instruments/drumpad/drumpad.c` (`build_stack`), then `layers/layer_stack.c` (`in_range`) |
+| A pad key or `+` / `-` does nothing | is the drumpad track selected (`Tab`)? Then `instruments/drumpad/drumpad_keys.c` (`k_pad_keys`, `control_of`) |
+| An effect acts on more than one track or pad | it cannot by design: per track in `app/app_effects.c` (`state[track]`), per pad in `instruments/drumpad/drumpad_effects.c`. Check which track is selected and which pads are held |
+| Synced loops drift apart | a synced loop pitched in tape mode leaves the clock; use keep tempo (`P`). The clock is `instruments/drumpad/drumpad_clock.c` |
+| A loop will not start or stop | `instruments/drumpad/drumpad_control.c` (`pad_command`); a pad's loop is its sampler's transport voice |
+| A file plays at the wrong pitch or speed | `sampler/sampler.c` (`render_voice`: rate = engine-rate conversion × `rate` × note ratio); the player's rule is in `instruments/sample_player/sample_player_control.c` |
+| Fluttering sound in keep-tempo mode | the shifter (`effects/pitch_shift`); try tape mode (`T`); see "Known limit" above |
+| Clicks when starting / stopping / pausing a file | the 5 ms fades in `sampler/sampler.c` (`FADE_SECONDS`) |
 | Wrong tone / filter | `dsp/biquad/biquad.c`, `equalizer/equalizer.c`, the instrument's `…_patch.c` |
 | An effect misbehaves | its own folder. It cannot be affected by anything else |
 | Order of processing | `engine/engine_render.c` (short, reads top to bottom) |
@@ -375,17 +722,27 @@ Everything called from `engine_render`, i.e. every effect `_process`, every sour
 - [x] Offline rendering into WAV
 - [x] Layers (several sources as one composite sound) and tracks (select, volume, pan, mute, solo, hold)
 - [x] Backend contract with two implementations, WASAPI and WinMM, chosen at run time; WinMM-only build
+- [x] WAV and MP3 loading, sampler (pitch, loop, transport), echo, pitch shifter, player and sampler-keyboard instruments
+- [x] Drumpad: 16 pads, one file each, per-pad pitch / loop / volume / pan / pitch mode; key ranges per layer
+- [x] Per-track and per-pad effects, shared clock (synced / free pads), part of a file (cut)
+- [x] Recording: input as text (F5), WAV (F6), both (F7), every track; replay on copies of the tracks, sample-accurate
+- [x] `engine/`: sample-accurate timed commands (`engine_at`, `engine_cancel`), observer, per-channel clock; 16 channels (8 tracks + 8 copies)
 
 **Next** (each is one new folder)
 - [ ] `dsp/lfo/`, `dsp/svf/`: LFO and state-variable filter as building blocks
 - [ ] `synth/`: second oscillator, per-voice filter, exponential envelopes
-- [ ] `layers/`: key ranges (splits) and velocity ranges per layer
+- [ ] `layers/`: velocity ranges per layer (key ranges are done)
 - [ ] `tracks/`: a sequencer or looper, so tracks play without the keyboard
 - [ ] `effects/delay/`, `effects/reverb/`, `effects/chorus/`, `effects/compressor/`
-- [ ] `sampler/` + `io/wav_reader/`: port of the WAV playback from `winmm.h` (reuse its SIMD converters, target float)
-- [ ] `instruments/drumpad/`, `instruments/guitar/`
+- [ ] `sampler/`: stream long files from disk instead of decoding them completely (memory on small machines)
+- [ ] `effects/pitch_shift/`: a phase-aligned or phase-vocoder shifter, to remove the flutter on steady tones
+- [ ] `app/`: keys for the echo and pitch-shift parameters (today only on / off, values in `app_effects.c`)
+- [ ] `instruments/sample_player/`: a playlist (several files on one track)
+- [ ] `io/`: OGG and FLAC readers
+- [ ] `instruments/guitar/`
+- [ ] `instruments/drumpad/`: load a whole folder as a kit, choke groups (open / closed hi-hat), velocity
 - [ ] `equalizer/`: coefficient smoothing; frequency response from `biquad_design()` for a graphical EQ
-- [ ] `engine/`: sample-accurate events (frame timestamp in `AT_Command`), send/return busses
+- [ ] `engine/`: send/return busses
 - [ ] `input/midi/`: `midiInOpen` → `engine_note_on`
 - [ ] `backend/wasapi/`: `IMMNotificationClient` (hot-plug), capture (`IAudioCaptureClient`)
 - [ ] Windows 98: build with a GCC toolchain that targets it, run on a real machine, measure CPU load
@@ -405,7 +762,7 @@ Everything called from `engine_render`, i.e. every effect `_process`, every sour
 | `angle_of_tone()` | `engine_set_channel_pan()` | Per channel, smoothed |
 | `reverb_tone()` | an effect folder + a hook point | Any effect, anywhere in the chain |
 | `set_amp_tone()` | `engine_set_channel_volume()` / velocity | Smoothed, no zipper noise |
-| `play_*_WAV()` | roadmap: `sampler/` as an `AT_SourceType` | |
+| `play_*_WAV()`, `set_pitch_WAV()`, `reverb_tone()` on WAVs | `--play` / `--sample` (`sampler/`), pitch via the sampler rate or the pitch shifter, echo as an effect | WAV and MP3, one loader, 8 voices, cubic interpolation (was nearest / linear), click-free fades |
 
 ---
 

@@ -1,0 +1,177 @@
+# AUDIATRON input recording. One event per line: seconds since the start, then what happened.
+# "key" lines are what was pressed; "pad" lines are what the drumpad did (the replay plays those).
+audiatron recording 1
+rate 44100
+clock 34559847
+track 1 piano
+track 2 layers
+track 3 drumpad
+track 4 replay
+track 5 fusion
+pad 1 A file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\_broken-glass-fx_B_minor.mp3
+pad 2 S file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\example.wav
+pad 3 D file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\file_example_WAV_1MG.wav
+pad 4 F file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-acer-hardtekk-kick-112753.mp3
+pad 5 G file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-bass-ui-298402.mp3
+pad 6 H file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-bass-wiggle-297877.mp3
+pad 7 J file C:\Users\nikit\Desktop\Programming\AUDIATRON\sample\van_wiese-schub-wiese-kick-310488.mp3
+0.000000 track 1 volume 0.800000012
+0.000000 track 1 pan 0
+0.000000 track 1 mute off
+0.000000 track 1 solo off
+0.000000 track 1 hold off
+0.000000 track 1 echo_ms 350
+0.000000 track 2 volume 0.300000012
+0.000000 track 2 pan 0
+0.000000 track 2 mute off
+0.000000 track 2 solo off
+0.000000 track 2 hold off
+0.000000 track 2 echo_ms 350
+0.000000 track 3 volume 0.800000012
+0.000000 track 3 pan 0
+0.000000 track 3 mute off
+0.000000 track 3 solo off
+0.000000 track 3 hold off
+0.000000 track 3 echo_ms 1075
+0.000000 track 1 synth wave 1
+0.000000 track 1 synth attack 0.00499999989
+0.000000 track 1 synth decay 0.25
+0.000000 track 1 synth sustain 0.600000024
+0.000000 track 1 synth release 0.400000006
+0.000000 track 1 synth gain 0.200000003
+0.000000 track 1 synth detune 0
+0.000000 track 2 layers 1 volume 1
+0.000000 track 2 layers 1 pan -0.150000006
+0.000000 track 2 layers 1 mute 0
+0.000000 track 2 layers 1 transpose 0
+0.000000 track 2 layers 2 volume 0.5
+0.000000 track 2 layers 2 pan 0.300000012
+0.000000 track 2 layers 2 mute 0
+0.000000 track 2 layers 2 transpose 0
+0.000000 track 2 layers 3 volume 0.349999994
+0.000000 track 2 layers 3 pan 0
+0.000000 track 2 layers 3 mute 0
+0.000000 track 2 layers 3 transpose -12
+0.000000 pad 1 A pitch +0
+0.000000 pad 1 A tempo off
+0.000000 pad 1 A volume 0.2
+0.000000 pad 1 A pan 0
+0.000000 pad 1 A sync on
+0.000000 pad 1 A echo_ms 1075
+0.000000 pad 1 A timing 0ms 0ms
+0.000000 pad 1 A cut 0 1
+0.000000 pad 1 A crush on
+0.000000 pad 1 A tremolo off
+0.000000 pad 1 A echo off
+0.000000 pad 1 A loop off
+0.000000 pad 2 S pitch +0
+0.000000 pad 2 S tempo off
+0.000000 pad 2 S volume 1
+0.000000 pad 2 S pan 0
+0.000000 pad 2 S sync on
+0.000000 pad 2 S echo_ms 1075
+0.000000 pad 2 S timing 0ms 0ms
+0.000000 pad 2 S cut 0 1
+0.000000 pad 2 S crush off
+0.000000 pad 2 S tremolo off
+0.000000 pad 2 S echo off
+0.000000 pad 2 S loop off
+0.000000 pad 3 D pitch +0
+0.000000 pad 3 D tempo off
+0.000000 pad 3 D volume 1
+0.000000 pad 3 D pan 0
+0.000000 pad 3 D sync on
+0.000000 pad 3 D echo_ms 1075
+0.000000 pad 3 D timing 0ms 0ms
+0.000000 pad 3 D cut 0 1
+0.000000 pad 3 D crush off
+0.000000 pad 3 D tremolo off
+0.000000 pad 3 D echo off
+0.000000 pad 3 D loop off
+0.000000 pad 4 F pitch +1
+0.000000 pad 4 F tempo off
+0.000000 pad 4 F volume 0.4
+0.000000 pad 4 F pan 0
+0.000000 pad 4 F sync on
+0.000000 pad 4 F echo_ms 1075
+0.000000 pad 4 F timing 0ms 0ms
+0.000000 pad 4 F cut 0 1
+0.000000 pad 4 F crush off
+0.000000 pad 4 F tremolo off
+0.000000 pad 4 F echo off
+0.000000 pad 4 F loop off
+0.000000 pad 5 G pitch +24
+0.000000 pad 5 G tempo off
+0.000000 pad 5 G volume 0.2
+0.000000 pad 5 G pan 0
+0.000000 pad 5 G sync on
+0.000000 pad 5 G echo_ms 1075
+0.000000 pad 5 G timing 0ms 250ms
+0.000000 pad 5 G cut 0ms 250ms
+0.000000 pad 5 G crush on
+0.000000 pad 5 G tremolo on
+0.000000 pad 5 G echo on
+0.000000 pad 5 G loop on
+0.000000 pad 6 H pitch +0
+0.000000 pad 6 H tempo off
+0.000000 pad 6 H volume 0.2
+0.000000 pad 6 H pan 0
+0.000000 pad 6 H sync on
+0.000000 pad 6 H echo_ms 1075
+0.000000 pad 6 H timing 0ms 0ms
+0.000000 pad 6 H cut 0 1
+0.000000 pad 6 H crush on
+0.000000 pad 6 H tremolo off
+0.000000 pad 6 H echo off
+0.000000 pad 6 H loop on
+0.000000 pad 7 J pitch +0
+0.000000 pad 7 J tempo off
+0.000000 pad 7 J volume 1
+0.000000 pad 7 J pan 0
+0.000000 pad 7 J sync on
+0.000000 pad 7 J echo_ms 1075
+0.000000 pad 7 J timing 0ms 0ms
+0.000000 pad 7 J cut 0 1
+0.000000 pad 7 J crush off
+0.000000 pad 7 J tremolo off
+0.000000 pad 7 J echo off
+0.000000 pad 7 J loop off
+0.000000 pad 5 G loop start
+0.000000 pad 6 H loop start
+0.000000 track 5 select fusion
+0.010000 key F5 up
+0.390000 pad 4 F hit 1
+0.890000 pad 4 F hit 1
+1.390000 pad 4 F hit 1
+1.890000 pad 4 F hit 1
+2.390000 pad 4 F hit 1
+2.890000 pad 4 F hit 1
+3.390000 pad 4 F hit 1
+3.890000 pad 4 F hit 1
+4.390000 pad 4 F hit 1
+4.890000 pad 4 F hit 1
+5.390000 pad 4 F hit 1
+5.890000 pad 4 F hit 1
+6.390000 pad 4 F hit 1
+6.890000 pad 4 F hit 1
+7.390000 pad 4 F hit 1
+7.890000 pad 4 F hit 1
+8.390000 pad 4 F hit 1
+8.890000 pad 4 F hit 1
+9.390000 pad 4 F hit 1
+9.890000 pad 4 F hit 1
+10.390000 pad 4 F hit 1
+10.890000 pad 4 F hit 1
+11.390000 pad 4 F hit 1
+11.890000 pad 4 F hit 1
+12.390000 pad 4 F hit 1
+12.890000 pad 4 F hit 1
+13.390000 pad 4 F hit 1
+13.890000 pad 4 F hit 1
+14.390000 pad 4 F hit 1
+14.890000 pad 4 F hit 1
+15.390000 pad 4 F hit 1
+15.890000 pad 4 F hit 1
+16.390000 pad 4 F hit 1
+16.350000 key F7 down
+16.350000 end

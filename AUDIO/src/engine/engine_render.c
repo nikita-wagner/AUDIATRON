@@ -20,6 +20,7 @@ static void render_channel(AT_Engine* e, int c, AT_Buffer* strip, AT_Buffer* bus
     if (!ch->source.type) return;                   // nothing plugged in
 
     at_buffer_clear(strip);
+    strip->frame_clock = e->frame_clock - ch->clock_offset;     // the channel's own time (0 offset: the engine's)
     ch->source.type->render(strip, ch->source.self);
 
     run_hooks(e->hooks[AT_HOOK_SOURCE][c], strip);
@@ -64,14 +65,17 @@ static void render_block(AT_Engine* e, AT_Buffer* bus) {
 void engine_render(AT_Buffer* out, void* user) {
     AT_Engine* e = (AT_Engine*)user;
 
-    // Commands land at block granularity (one device period, ~3–10 ms).
-    // TODO (sample-accurate events): add a frame timestamp to AT_Command and
-    // split the block at each event's offset.
+    // Plain commands land at the start of the block (one device period,
+    // ~3–10 ms). Timed ones (engine_at) land on their exact frame: the block
+    // is rendered in pieces that end where the next timed command is due.
     engine_apply_pending_commands(e);
 
     for (uint32_t done = 0; done < out->frames; ) {
+        engine_apply_due_commands(e);
+
         uint32_t n = out->frames - done;
         if (n > AT_MAX_BLOCK_FRAMES) n = AT_MAX_BLOCK_FRAMES;
+        n = engine_frames_to_next_command(e, n);
         AT_Buffer slice = at_buffer_slice(out, done, n);
         render_block(e, &slice);
         done += n;

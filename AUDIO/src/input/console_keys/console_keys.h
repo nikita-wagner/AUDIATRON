@@ -18,7 +18,7 @@
 typedef struct {
     HANDLE handle;
     DWORD  old_mode;
-    bool   is_down[AT_SC_COUNT];    // to tell a first press from auto-repeat
+    bool   is_down[AT_SC_COUNT * 2]; // to tell a first press from auto-repeat; extended keys in the upper half
 } AT_ConsoleKeys;
 
 // false = stdin is not a real console (piped / redirected).

@@ -9,6 +9,8 @@
 //  One layer = a source (anything with an AT_SourceType: a synth, later a
 //  sampler, even another layer stack) + how it sits in the composite sound:
 //
+//      key range   the notes the layer answers (default: all). One note per
+//                  layer turns a stack into a drum kit: every pad its own sound
 //      transpose   semitones added to every note (+12 = one octave above)
 //      strip       volume, pan, mute — smoothed, with a peak meter
 //      inserts     effects that change this layer only
@@ -35,7 +37,7 @@
 #include "core/at_module.h"
 #include "mixer/channel_strip/channel_strip.h"
 
-#define AT_LAYER_MAX      8         // layers per stack
+#define AT_LAYER_MAX      16        // layers per stack
 #define AT_LAYER_INSERTS  2         // chained effects per layer
 
 typedef struct {
@@ -47,6 +49,8 @@ typedef struct {
     const char*          name;
     const AT_SourceType* type;      // the layer's sound generator
     void*                self;
+    int                  note_low;  // key range: the layer only answers notes
+    int                  note_high; //   note_low..note_high (before transpose)
     int                  transpose; // semitones added to every note
     AT_ChannelStrip      strip;     // volume / pan / mute inside the composite sound
     AT_LayerInsert       inserts[AT_LAYER_INSERTS];
@@ -75,6 +79,10 @@ void layer_stack_init(AT_LayerStack* s, float sample_rate);
 // caller can adjust transpose / strip.volume / strip.pan, or NULL if the stack
 // is full. `self` (the layer's source state) must outlive the stack's use.
 AT_Layer* layer_stack_add(AT_LayerStack* s, const char* name, const AT_SourceType* type, void* self);
+
+// Limits a layer to the notes low..high (inclusive, the notes the stack
+// receives, before transpose). A new layer answers every note.
+bool layer_stack_set_range(AT_LayerStack* s, uint32_t layer, int low, int high);
 
 // Puts an effect on one layer only. fn = NULL empties the slot.
 bool layer_stack_set_insert(AT_LayerStack* s, uint32_t layer, uint32_t slot, AT_ProcessFn fn, void* user);

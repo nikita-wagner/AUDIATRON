@@ -23,7 +23,10 @@
 #include "engine/engine.h"
 #include "instruments/instrument.h"
 
-#define AT_TRACK_MAX AT_ENGINE_CHANNELS
+// Tracks use the lower half of the engine channels; the upper half is free
+// for copies of them (the replay plays a recording on copies of the tracks).
+#define AT_TRACK_MAX 8
+_Static_assert(AT_TRACK_MAX * 2 <= AT_ENGINE_CHANNELS, "a copy of every track needs a channel");
 
 typedef struct {
     AT_Instrument instrument;       // what plays on this track

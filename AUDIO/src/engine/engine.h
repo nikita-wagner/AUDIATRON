@@ -48,8 +48,9 @@
 #include "mixer/peak_meter/peak_meter.h"
 #include "effects/soft_clip/soft_clip.h"
 
-#define AT_ENGINE_CHANNELS    8     // mixer channels (source + EQ + strip each)
+#define AT_ENGINE_CHANNELS    16    // mixer channels (source + EQ + strip each)
 #define AT_ENGINE_HOOK_SLOTS  4     // chained effects per hook point
+#define AT_ENGINE_TIMED       2048  // commands waiting for their frame (engine_at)
 
 typedef enum {
     AT_HOOK_SOURCE,
@@ -75,12 +76,45 @@ typedef struct {
     bool            hold;           // latched: note-offs are ignored until the hold is released
     AT_Equalizer    eq;
     AT_ChannelStrip strip;
+    uint64_t        clock_offset;   // this channel's source and effects see frame_clock - clock_offset
 } AT_EngineChannel;
+
+// What a control thread asked the engine to do, as seen by an observer
+// (engine_set_observer). The fields that do not apply to a type are 0.
+typedef enum {
+    AT_ENGINE_EV_NOTE_ON,           // channel, note, value = velocity
+    AT_ENGINE_EV_NOTE_OFF,          // channel, note
+    AT_ENGINE_EV_ALL_NOTES_OFF,     // channel (-1 = every channel)
+    AT_ENGINE_EV_PARAM              // fn, self, param, value
+} AT_EngineEventType;
+
+typedef struct {
+    AT_EngineEventType type;
+    int         channel;
+    int         note;
+    float       value;
+    AT_ParamFn  fn;
+    void*       self;
+    int         param;
+} AT_EngineEvent;
+
+typedef void (*AT_EngineObserver)(void* user, const AT_EngineEvent* ev);
 
 typedef struct {
     float            sample_rate;
     uint64_t         frame_clock;
     AT_Queue         queue;
+
+    // control side: the time and tag given to the next commands (engine_at),
+    // and who is told about notes and parameters (engine_set_observer)
+    uint64_t         stamp_frame;
+    int32_t          stamp_tag;
+    AT_EngineObserver observer;
+    void*            observer_user;
+
+    // audio side: timed commands waiting for their frame, in frame order
+    AT_Command       timed[AT_ENGINE_TIMED];
+    uint32_t         timed_count;
 
     AT_EngineChannel channel[AT_ENGINE_CHANNELS];
 
@@ -96,7 +130,7 @@ typedef struct {
     float            strip_mem[AT_MAX_CHANNELS][AT_MAX_BLOCK_FRAMES];
 } AT_Engine;
 
-// ~30 KB — allocate statically or on the heap rather than on a thread stack.
+// ~300 KB — allocate statically or on the heap rather than on a thread stack.
 void engine_init    (AT_Engine* e, float sample_rate);
 void engine_shutdown(AT_Engine* e);
 
@@ -130,6 +164,11 @@ bool engine_set_param(AT_Engine* e, AT_ParamFn fn, void* self, int param, float 
 bool engine_set_channel_volume(AT_Engine* e, uint32_t channel, float volume);
 bool engine_set_channel_pan   (AT_Engine* e, uint32_t channel, float pan);
 bool engine_set_channel_mute  (AT_Engine* e, uint32_t channel, bool mute);
+// The time this channel's source and effects see is frame_clock - offset
+// (default 0). Things locked to the clock, like a tremolo's LFO, then run as
+// if the channel were `offset` frames earlier: a replay uses it so a copy's
+// LFOs are in the same phase as when the take was recorded.
+bool engine_set_channel_clock (AT_Engine* e, uint32_t channel, uint64_t offset);
 bool engine_set_master_volume (AT_Engine* e, float volume);
 bool engine_set_limiter       (AT_Engine* e, bool enabled);
 
@@ -137,6 +176,33 @@ bool engine_set_limiter       (AT_Engine* e, bool enabled);
 bool engine_set_eq_band  (AT_Engine* e, int channel, uint32_t band, AT_FilterType type,
                           float freq, float q, float gain_db);
 bool engine_set_eq_bypass(AT_Engine* e, int channel, bool bypass);
+
+// ─── Timing: commands on an exact frame ─────────────────────────────────────
+//
+// Every command sent after engine_at(e, frame, tag) is applied exactly at
+// engine frame `frame` (the audio block is split there), instead of at the
+// start of the next block. engine_at(e, 0, 0) goes back to "as soon as
+// possible". A frame that has already passed is applied at once.
+//
+//     engine_at(&engine, start + 24012, 1);       // 0.50025 s after `start`
+//     engine_note_on(&engine, 0, 60, 0.9f);
+//     engine_at(&engine, 0, 0);
+//
+// The setting belongs to the calling control thread: use it from one thread,
+// or reset it before another thread sends. `tag` (not 0) marks the commands so
+// engine_cancel can drop those still waiting.
+void engine_at    (AT_Engine* e, uint64_t frame, int tag);
+// The engine frame the next block starts at (frames rendered so far); any
+// thread. For timing commands with engine_at.
+uint64_t engine_now(const AT_Engine* e);
+bool engine_cancel(AT_Engine* e, int tag);          // drops waiting commands with this tag (applies at once)
+
+// ─── Observing (control thread) ─────────────────────────────────────────────
+//
+// fn is called for every note-on, note-off, all-notes-off and parameter
+// command, on the thread that sends it, before it is queued. For recording
+// what instruments do. NULL stops it.
+void engine_set_observer(AT_Engine* e, AT_EngineObserver fn, void* user);
 
 // ─── Metering (any thread, lock-free, approximate) ──────────────────────────
 
