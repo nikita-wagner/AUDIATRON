@@ -26,8 +26,16 @@ enum {
     AT_CMD_SET_EQ_BAND,         // i0 = ch/-1, i1 = band, i2 = type, f0 = freq, f1 = q, f2 = gain_db
     AT_CMD_SET_EQ_BYPASS,       // i0 = ch/-1, i1 = bypass
     AT_CMD_CANCEL,              // i0 = tag: drop waiting timed commands with it
-    AT_CMD_SET_CH_CLOCK         // i0 = ch, i1 = offset low 32 bits, i2 = high 32 bits
+    AT_CMD_SET_CH_CLOCK,        // i0 = ch, i1 = offset low 32 bits, i2 = high 32 bits
+    AT_CMD_SET_CH_SYNC,         // i0 = ch, i1 = on
+    AT_CMD_SET_SYNC_GRID,       // i0..1 = step (double bits), i2..3 = bar (double bits)
+    AT_CMD_SET_SYNC_ORIGIN      // i0 = fixed, i1 = origin low 32 bits, i2 = high 32 bits
 };
+
+// engine_sync.c (audio thread)
+void engine_sync_apply    (AT_Engine* e, const AT_Command* c);
+bool engine_sync_hold_back(AT_Engine* e, AT_Command* c);    // true = a note now waits for the grid (c->frame set)
+void engine_sync_publish  (AT_Engine* e);
 
 // Audio thread, at the start of every render call: applies the timed commands
 // that are due, then drains the queue (a command for a later frame waits in

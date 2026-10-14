@@ -96,13 +96,20 @@ typedef struct {
     float    sample_rate;                   // of the engine
     float    fade_coef;                     // one-pole smoothing, ~5 ms
 
+    // Optional clock the transport joins (sample_player sets it to the engine's
+    // sync clock). Asked on the audio thread when PLAY starts the transport
+    // afresh: true + *elapsed = start in phase (sampler_play_elapsed), false =
+    // start as usual. PLAY with value 1 never asks (a sequencer placed it).
+    bool  (*sync)(void* user, double* elapsed);
+    void*  sync_user;
+
     // Readouts for the control thread (updated once per block; approximate).
     volatile int32_t position_frames;       // transport position
     volatile int32_t playing;               // 1 while the transport voice is audible
 } AT_Sampler;
 
 typedef enum {
-    AT_SAMPLER_PARAM_PLAY,                  // start or resume the transport voice (value ignored)
+    AT_SAMPLER_PARAM_PLAY,                  // start or resume the transport voice (1 = without joining the sync clock)
     AT_SAMPLER_PARAM_PAUSE,                 // value 1 = pause, 0 = resume
     AT_SAMPLER_PARAM_STOP,                  // fade out and rewind (value ignored)
     AT_SAMPLER_PARAM_SEEK,                  // seconds from the start of the clip

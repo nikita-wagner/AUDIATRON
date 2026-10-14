@@ -37,7 +37,6 @@ static bool apply_fx_options(AT_App* app) {
 // Selects the track named with --track; without it, the first sound-file track, else track 1.
 static bool apply_track_option(AT_App* app) {
     int track = app->options.track;
-    if (track <= 0 && app->options.replay_path && app->replay_track >= 0) track = app->replay_track + 1;
     if (track <= 0) track = app->first_sound_track >= 0 ? app->first_sound_track + 1 : 1;
     if (track_list_select(&app->tracks, (uint32_t)(track - 1))) return true;
 
@@ -60,7 +59,7 @@ bool app_setup(AT_App* app, float sample_rate) {
     app_effects_setup(app);
     app_replay_setup(app);
 
-    // --replay: the recording goes onto the replay track before anything plays
+    // --replay: the recording is loaded and plays from the start (F8 plays it again)
     if (app->options.replay_path && !app_replay_load(app, app->options.replay_path)) {
         app_replay_teardown(app);
         app_effects_teardown(app);
@@ -68,6 +67,8 @@ bool app_setup(AT_App* app, float sample_rate) {
         engine_shutdown(&app->engine);
         return false;
     }
+
+    if (app->options.replay_path) replay_play(app->replay);
 
     // the track first: --fx switches effects on for the start track
     if (!apply_track_option(app) || !apply_fx_options(app)) {

@@ -30,6 +30,7 @@
 //    engine_render.c     the graph above                    (audio thread)
 //    engine_commands.c   applies queued commands            (audio thread)
 //    engine_control.c    the engine_* functions below       (control threads)
+//    engine_sync.c       one clock for the channels switched to sync
 //
 //  Threading: every engine_* control function is safe to call from any thread
 //  at any time. It only enqueues a command; the audio thread applies it at the
@@ -48,7 +49,7 @@
 #include "mixer/peak_meter/peak_meter.h"
 #include "effects/soft_clip/soft_clip.h"
 
-#define AT_ENGINE_CHANNELS    16    // mixer channels (source + EQ + strip each)
+#define AT_ENGINE_CHANNELS    32    // mixer channels (source + EQ + strip each)
 #define AT_ENGINE_HOOK_SLOTS  4     // chained effects per hook point
 #define AT_ENGINE_TIMED       2048  // commands waiting for their frame (engine_at)
 
@@ -100,6 +101,23 @@ typedef struct {
 
 typedef void (*AT_EngineObserver)(void* user, const AT_EngineEvent* ev);
 
+// The sync clock (engine_sync.c). Audio thread, except where it says otherwise.
+typedef struct {
+    bool              on[AT_ENGINE_CHANNELS];       // the channel is on the clock
+    uint64_t          origin;                       // engine frame of the clock's time 0
+    bool              fixed;                        // pinned from outside (a transport): runs, keeps its origin
+    double            step;                         // frames between grid points for notes (0 = they play at once)
+    double            bar;                          // frames per bar (0 = unknown)
+    uint64_t          note_at[AT_ENGINE_CHANNELS][128];   // where a held-back note-on landed
+    // control side: as last sent
+    bool              sent_on[AT_ENGINE_CHANNELS];
+    double            sent_step, sent_bar;
+    // published after every block for the control threads (read with engine_sync_clock)
+    volatile uint32_t shown_seq;
+    volatile uint32_t shown_origin_lo, shown_origin_hi;
+    volatile int32_t  shown_running;
+} AT_EngineSync;
+
 typedef struct {
     float            sample_rate;
     uint64_t         frame_clock;
@@ -128,6 +146,8 @@ typedef struct {
     AT_Hook          hooks[AT_HOOK_POINT_COUNT][AT_ENGINE_CHANNELS][AT_ENGINE_HOOK_SLOTS];
 
     float            strip_mem[AT_MAX_CHANNELS][AT_MAX_BLOCK_FRAMES];
+
+    AT_EngineSync    sync;
 } AT_Engine;
 
 // ~300 KB — allocate statically or on the heap rather than on a thread stack.
@@ -196,6 +216,33 @@ void engine_at    (AT_Engine* e, uint64_t frame, int tag);
 // thread. For timing commands with engine_at.
 uint64_t engine_now(const AT_Engine* e);
 bool engine_cancel(AT_Engine* e, int tag);          // drops waiting commands with this tag (applies at once)
+
+// ─── Sync: channels on one clock (engine_sync.c) ────────────────────────────
+//
+// Channels switched to sync share one clock, so what they play starts from
+// the same position in time:
+//   loops   a loop starting on a synced channel (drumpad loop, player song,
+//           machine) joins the clock in phase: it starts where it would be
+//           had it started with the clock. While nothing synced plays the
+//           clock is idle, and the next synced loop starts it from its top.
+//   notes   while the clock runs, notes and hits sent to a synced channel
+//           wait for its next grid step (step 0 = they play at once); a
+//           note-off lands at least one step after its note-on. Notes sent
+//           with engine_at keep their frame.
+//   origin  a transport can pin the clock to its beat 0 (fixed): it then runs
+//           while the transport runs.
+bool engine_set_channel_sync(AT_Engine* e, uint32_t channel, bool on);
+bool engine_channel_sync_sent(const AT_Engine* e, uint32_t channel);    // control view: as last set
+bool engine_set_sync_grid   (AT_Engine* e, double step_frames, double bar_frames);   // 0 = none
+bool engine_set_sync_origin (AT_Engine* e, uint64_t origin, bool fixed);             // fixed = false: free again
+// Control thread: does the clock run, and its origin (as of the last block).
+bool     engine_sync_clock   (const AT_Engine* e, uint64_t* origin);
+// Control thread: the clock's next bar line at or after `frame` (frame itself when it is idle or has no bars).
+uint64_t engine_sync_next_bar(const AT_Engine* e, uint64_t frame);
+// Audio thread (sources, parameter functions):
+bool     engine_channel_synced(const AT_Engine* e, uint32_t channel);
+double   engine_sync_join     (AT_Engine* e, uint32_t channel);   // frames since the clock's start (0: this starts it)
+uint64_t engine_sync_origin   (const AT_Engine* e);
 
 // ─── Observing (control thread) ─────────────────────────────────────────────
 //

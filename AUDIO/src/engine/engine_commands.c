@@ -111,6 +111,12 @@ static void apply_command(AT_Engine* e, const AT_Command* c) {
             e->channel[ch].clock_offset = ((uint64_t)(uint32_t)c->i[2] << 32) | (uint32_t)c->i[1];
         break;
 
+    case AT_CMD_SET_CH_SYNC:
+    case AT_CMD_SET_SYNC_GRID:
+    case AT_CMD_SET_SYNC_ORIGIN:
+        engine_sync_apply(e, c);
+        break;
+
     case AT_CMD_CANCEL: {
         uint32_t kept = 0;
         for (uint32_t i = 0; i < e->timed_count; i++)
@@ -158,7 +164,8 @@ void engine_apply_pending_commands(AT_Engine* e) {
 
     AT_Command cmd;
     while (at_queue_pop(&e->queue, &cmd)) {
-        if (cmd.frame > e->frame_clock) wait_for_frame(e, &cmd);
-        else                            apply_command(e, &cmd);
+        if (cmd.frame > e->frame_clock)            wait_for_frame(e, &cmd);
+        else if (engine_sync_hold_back(e, &cmd))   wait_for_frame(e, &cmd);     // a synced note waits for the grid
+        else                                       apply_command(e, &cmd);
     }
 }

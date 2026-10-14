@@ -25,7 +25,7 @@
 
 // Tracks use the lower half of the engine channels; the upper half is free
 // for copies of them (the replay plays a recording on copies of the tracks).
-#define AT_TRACK_MAX 8
+#define AT_TRACK_MAX 16
 _Static_assert(AT_TRACK_MAX * 2 <= AT_ENGINE_CHANNELS, "a copy of every track needs a channel");
 
 typedef struct {

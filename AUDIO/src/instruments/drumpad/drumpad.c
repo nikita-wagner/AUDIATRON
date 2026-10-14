@@ -64,11 +64,33 @@ bool drumpad_load(AT_Drumpad* d, int pad, const char* path, char* error, size_t 
     return true;
 }
 
+void drumpad_init_copy(AT_Drumpad* copy, const AT_Drumpad* original, float sample_rate) {
+    drumpad_init(copy, sample_rate);
+    for (int i = 0; i < AT_DRUMPAD_PADS; i++) {
+        const AT_DrumPad* from = &original->pads[i];
+        AT_DrumPad*       p    = &copy->pads[i];
+        if (!from->loaded) continue;
+        p->clip   = from->clip;                             // the same samples
+        p->shared = true;
+        p->loaded = true;
+        snprintf(p->label, sizeof p->label, "%s", from->label);
+        snprintf(p->path, sizeof p->path, "%s", from->path);
+        sampler_init(&p->sampler, sample_rate, &p->clip);
+        pitch_shift_init(&p->shifter, sample_rate);
+        drumpad_fx_init(p, sample_rate);
+        p->cut_from = 0.0f;
+        p->cut_to   = 1.0f;
+        if (copy->selected < 0) copy->selected = i;
+    }
+}
+
 void drumpad_free(AT_Drumpad* d) {
     for (int i = 0; i < AT_DRUMPAD_PADS; i++) {
         AT_DrumPad* p = &d->pads[i];
         if (!p->loaded) continue;
-        audio_clip_free(&p->clip);
+        if (!p->shared) audio_clip_free(&p->clip);
+        memset(&p->clip, 0, sizeof p->clip);
+        p->shared = false;
         drumpad_fx_free(p);
         memset(&p->sampler, 0, sizeof p->sampler);      // its clip pointer is gone
         p->loaded = false;

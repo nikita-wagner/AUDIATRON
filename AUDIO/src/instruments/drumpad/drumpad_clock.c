@@ -37,16 +37,6 @@ static void source_note_on(void* self, int note, float velocity) {
 static void source_note_off(void* self, int note) { layer_stack_note_off(&((AT_Drumpad*)self)->stack, note); }
 static void source_all_off (void* self)           { layer_stack_all_notes_off(&((AT_Drumpad*)self)->stack); }
 
-const AT_SourceType AT_DRUMPAD_SOURCE = {
-    .name          = "drumpad",
-    .render        = source_render,
-    .note_on       = source_note_on,
-    .note_off      = source_note_off,
-    .all_notes_off = source_all_off
-};
-
-// ─── Loops on the clock ──────────────────────────────────────────────────────
-
 // Is a synced loop other than `except` playing? Then the clock is running.
 // (`playing` is the sampler's own readout, refreshed every block.)
 static bool clock_running(const AT_Drumpad* d, int except) {
@@ -57,12 +47,35 @@ static bool clock_running(const AT_Drumpad* d, int except) {
     return false;
 }
 
+// For the engine's sync clock: a synced loop of the drumpad plays.
+static bool source_playing(void* self) { return clock_running((const AT_Drumpad*)self, -1); }
+
+const AT_SourceType AT_DRUMPAD_SOURCE = {
+    .name          = "drumpad",
+    .render        = source_render,
+    .note_on       = source_note_on,
+    .note_off      = source_note_off,
+    .all_notes_off = source_all_off,
+    .playing       = source_playing
+};
+
+// ─── Loops on the clock ──────────────────────────────────────────────────────
+
 double drumpad_clock_loop_start(AT_Drumpad* d, int pad) {
     AT_DrumPad*    p   = &d->pads[pad];
     const uint64_t now = d->clock.next;
 
     p->own_origin = now;
     if (!p->synced) return 0.0;                             // free: from the top, now
+
+    // The track is switched to sync: the clock is the engine's, which every
+    // synced track shares, so the pads stay in phase with the other tracks too.
+    if (engine_channel_synced(d->engine, d->channel)) {
+        const double   elapsed = engine_sync_join(d->engine, d->channel);
+        const uint64_t ago     = (uint64_t)llround(elapsed);
+        d->clock.origin = d->engine->frame_clock >= ago ? d->engine->frame_clock - ago : 0;
+        return elapsed;
+    }
 
     if (!clock_running(d, pad)) {                           // the first synced loop starts the clock
         d->clock.origin = now;

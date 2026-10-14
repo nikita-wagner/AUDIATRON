@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  app/app_replay.c — plays a recording on copies of the tracks
 //
-//  The replay track (instruments/replay) reads a recording and hands every
-//  line over shortly before it is due, with its exact engine frame. This file
-//  says what a line means and plays it, on the copies, never on the live
+//  The replay (instruments/replay; no track of its own: F8 in the console, an
+//  audio track's .txt regions in AudioStudio) reads a recording and hands
+//  every line over shortly before it is due, with its exact engine frame. This
+//  file says what a line means and plays it, on the copies, never on the live
 //  tracks, so you can play along:
 //
 //      track 1 note 60 on 0.9         a note on the piano copy
@@ -11,8 +12,8 @@
 //      track 5 sampler play           the player copy's song
 //      track 1 volume 0.7             the copy's channel: volume, pan,
 //      track 1 mute on / solo / hold     mute, solo, hold, crush / tremolo / echo
-//      pad 2 S loop start             the replay's own drumpad (it sits on the
-//                                     replay track's channel)
+//      track 3 pad 2 S loop start     a pad of the copy of drum track 3
+//      pad 2 S loop start             (older recordings) a pad of the first drum track's copy
 //      all notes off                  everything of the replay stops
 //
 //  Every command is sent with engine_at(frame, tag), so the engine applies it
@@ -25,18 +26,32 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "layers/layer_stack.h"
 #include "sampler/sampler.h"
+#include "synth/synth.h"
 
 #define REPLAY_TAG 0x52504C59                   // marks the replay's timed commands
 
-static AT_Drumpad s_drums;                      // the recording's drums, on the replay track's channel
-static bool       s_drums_attached;
+static AT_Replay  s_replay;                     // the app's one replay
 static uint64_t   s_recorded_clock;             // the engine frame at the recording's time 0 ("clock" line)
 
 // ─── Where things of the recording play ──────────────────────────────────────
 
-static uint32_t replay_channel(const AT_App* app) {
-    return app->tracks.tracks[app->replay_track].channel;
+// The copy of this program's drum track `live`, NULL = none.
+static AT_Drumpad* drum_copy(const AT_App* app, int live) {
+    if (live < 0 || live >= (int)app->tracks.count || app->track_info[live].kind != AT_APP_KIND_DRUMPAD) return NULL;
+    return (AT_Drumpad*)app->track_info[live].copy;
+}
+
+// Where an older recording's "pad" lines (no track) play: the first drum track the recording maps to.
+static AT_Drumpad* first_drum_copy(const AT_App* app) {
+    for (int t = 0; t < AT_TRACK_MAX; t++) {
+        AT_Drumpad* d = drum_copy(app, app->replay_map[t]);
+        if (d) return d;
+    }
+    for (int live = 0; live < (int)app->tracks.count; live++)
+        if (drum_copy(app, live)) return drum_copy(app, live);
+    return NULL;
 }
 
 // The copy channel of this program's track `live` (melodic tracks only), -1 = none.
@@ -48,9 +63,7 @@ static int melodic_copy_channel(const AT_App* app, int live) {
 // The channel that plays recording track `t`, -1 = nothing plays it.
 static int copy_channel(const AT_App* app, int t) {
     if (t < 0 || t >= AT_TRACK_MAX) return -1;
-    int live = app->replay_map[t];
-    if (live == AT_APP_REPLAY_DRUMS) return app->replay ? (int)replay_channel(app) : -1;
-    return melodic_copy_channel(app, live);
+    return melodic_copy_channel(app, app->replay_map[t]);
 }
 
 // Mute and solo work like on the tracks (tracks/track_list.c), among the copies.
@@ -75,7 +88,10 @@ static void silence(AT_App* app) {
     for (uint32_t i = 0; i < app->target_count; i++)
         if (app->targets[i].fn == sampler_set_param)
             engine_set_param(&app->engine, sampler_set_param, app->targets[i].copy, AT_SAMPLER_PARAM_STOP, 0.0f);
-    for (int p = 0; p < AT_DRUMPAD_PADS; p++) drumpad_loop_stop(&s_drums, p);
+    for (int live = 0; live < (int)app->tracks.count; live++) {
+        AT_Drumpad* d = drum_copy(app, live);
+        for (int p = 0; d && p < AT_DRUMPAD_PADS; p++) drumpad_loop_stop(d, p);
+    }
 }
 
 // ─── The host the replay track calls ─────────────────────────────────────────
@@ -102,13 +118,16 @@ static void host_begin(void* user, uint64_t at) {
             if (app->effects[fx].enabled[ch]) app_effect_set_channel(app, fx, (uint32_t)ch, false);
     }
     send_audibility(app);
-    for (int p = 0; p < AT_DRUMPAD_PADS; p++) {
-        if (!s_drums.pads[p].loaded) continue;
-        drumpad_reset(&s_drums, p);
-        drumpad_set_loop(&s_drums, p, false);
-        drumpad_set_sync(&s_drums, p, true);
-        drumpad_set_cut(&s_drums, p, 0.0f, 1.0f);
-        drumpad_set_timing(&s_drums, p, 0.0f, 0.0f);
+    for (int live = 0; live < (int)app->tracks.count; live++) {
+        AT_Drumpad* d = drum_copy(app, live);
+        for (int p = 0; d && p < AT_DRUMPAD_PADS; p++) {
+            if (!d->pads[p].loaded) continue;
+            drumpad_reset(d, p);
+            drumpad_set_loop(d, p, false);
+            drumpad_set_sync(d, p, true);
+            drumpad_set_cut(d, p, 0.0f, 1.0f);
+            drumpad_set_timing(d, p, 0.0f, 0.0f);
+        }
     }
     engine_at(&app->engine, 0, 0);
 }
@@ -141,6 +160,12 @@ static void apply_track_line(AT_App* app, const char* text) {
     char        arg[32] = "";
     sscanf(rest, " %31s", arg);
 
+    if (!strcmp(word, "pad")) {                             // "track 3 pad 2 S hit 0.8": the drum track's copy
+        AT_Drumpad* d = drum_copy(app, live);
+        AT_PadEvent ev;
+        if (d && drumpad_event_parse(text + used - 3, &ev) && d->pads[ev.pad].loaded) drumpad_event_apply(d, &ev);
+        return;
+    }
     if (!strcmp(word, "note")) {
         int   note = 0;
         float velocity = 1.0f;
@@ -158,12 +183,40 @@ static void apply_track_line(AT_App* app, const char* text) {
     if (!strcmp(word, "hold") && on_off(arg, &on)) { engine_set_channel_hold(&app->engine, (uint32_t)ch, on); return; }
     if (!strcmp(word, "echo_ms"))                  { app_set_echo_ms_channel(app, (uint32_t)ch, atoi(arg)); return; }
 
+    int   param = 0;
+    float value = 0.0f;
     int fx = app_effect_find(app, word);                    // crush / tremolo / echo
     if (fx >= 0 && on_off(arg, &on)) { app_effect_set_channel(app, (uint32_t)fx, (uint32_t)ch, on); return; }
+    if (fx >= 0) {                                          // "track 2 tremolo rate 4.5": the copy's instance
+        AT_ParamFn fn = app->effects[fx].set_param;
+        void*      st = fn && app_object_param_parse(fn, rest, &param, &value) ? app_effect_state_channel(app, (uint32_t)fx, (uint32_t)ch) : NULL;
+        if (st) engine_set_param(&app->engine, fn, st, param, value);
+        return;
+    }
 
     const AT_AppTarget* target = app_target_find_name(app, live, word);  // synth / layers / sampler / shifter
-    int   param;
-    float value;
+
+    // "track 2 layers 2 tremolo depth 0.3", "track 2 layers 3 synth attack 0.01": inside a layer of the copy
+    if (target && target->fn == layer_stack_set_param) {
+        int  layer = 0, n = 0;
+        char kind[32] = "";
+        if (sscanf(rest, " %d %31s%n", &layer, kind, &n) == 2 && layer >= 1) {
+            AT_LayerStack* copy = (AT_LayerStack*)target->copy;
+            AT_Layer*      l    = copy && (uint32_t)layer <= copy->count ? &copy->layers[layer - 1] : NULL;
+            AT_ParamFn     fn   = NULL;
+            void*          obj  = NULL;
+            if (l && !strcmp(kind, "synth") && l->type == &AT_SYNTH_SOURCE) { fn = synth_set_param; obj = l->self; }
+            for (int s = 0; l && !fn && s < AT_LAYER_INSERTS; s++) {
+                AT_ParamFn f = app_effect_param_fn(l->inserts[s].fn);
+                if (f && !strcmp(kind, app_object_kind(f))) { fn = f; obj = l->inserts[s].user; }
+            }
+            if (fn) {
+                if (obj && app_object_param_parse(fn, rest + n, &param, &value))
+                    engine_set_param(&app->engine, fn, obj, param, value);
+                return;
+            }
+        }
+    }
     if (target && app_param_parse(target, rest, &param, &value))
         engine_set_param(&app->engine, target->fn, target->copy, param, value);
     // anything else ("select", ...) is there to read
@@ -174,33 +227,29 @@ static void host_apply(void* user, uint64_t at, const char* line) {
     engine_at(&app->engine, at, REPLAY_TAG);
 
     AT_PadEvent pad;
+    AT_Drumpad* d;
     if (!strncmp(line, "track ", 6))           apply_track_line(app, line);
     else if (!strcmp(line, "all notes off"))   silence(app);
-    else if (drumpad_event_parse(line, &pad)) { if (s_drums.pads[pad.pad].loaded) drumpad_event_apply(&s_drums, &pad); }
+    else if (drumpad_event_parse(line, &pad) && (d = first_drum_copy(app)) != NULL && d->pads[pad.pad].loaded)
+        drumpad_event_apply(d, &pad);           // an older recording's pad
 
     engine_at(&app->engine, 0, 0);
 }
 
 // ─── Setup, loading ──────────────────────────────────────────────────────────
 
-static void attach_drums(AT_App* app) {
-    AT_Instrument drums = drumpad_instrument(&s_drums);
-    drums.attach(drums.self, &app->engine, replay_channel(app));
-    s_drums_attached = true;
-}
-
 void app_replay_setup(AT_App* app) {
-    if (!app->replay) return;
-    app->replay->host = (AT_ReplayHost){ app, host_now, host_begin, host_apply, host_end, host_load };
-    replay_set_folder(app->replay, app->options.record_dir ? app->options.record_dir : "recordings");
-    drumpad_init(&s_drums, app->sample_rate);
-    attach_drums(app);                                      // empty until a recording is loaded
+    replay_init(&s_replay, app->sample_rate, (AT_ReplayHost){ app, host_now, host_begin, host_apply, host_end, host_load });
+    s_replay.engine  = &app->engine;                         // no channel of its own: it plays on the copies
+    s_replay.channel = (uint32_t)AT_ENGINE_CHANNELS;
+    replay_set_folder(&s_replay, app->options.record_dir ? app->options.record_dir : "recordings");
+    app->replay = &s_replay;
 }
 
 void app_replay_teardown(AT_App* app) {
-    (void)app;
-    drumpad_free(&s_drums);
-    s_drums_attached = false;
+    s_replay.playing = false;                               // the engine is gone: nothing more is sent to it
+    replay_unload(&s_replay);
+    app->replay = NULL;
 }
 
 const char* app_kind_name(AT_AppKind kind) {
@@ -210,8 +259,8 @@ const char* app_kind_name(AT_AppKind kind) {
     case AT_APP_KIND_PLAYER:  return "player";
     case AT_APP_KIND_SAMPLER: return "sampler";
     case AT_APP_KIND_DRUMPAD: return "drumpad";
-    case AT_APP_KIND_REPLAY:  return "replay";
-    case AT_APP_KIND_FUSION:  return "fusion";
+    case AT_APP_KIND_MACHINE: return "machine";
+    case AT_APP_KIND_AUDIO:   return "audio";
     }
     return "?";
 }
@@ -237,8 +286,7 @@ static void map_track(AT_App* app, const char* line, bool used[AT_TRACK_MAX]) {
     if (file) file += 5;
 
     app->replay_map[t] = -1;
-    if (!strcmp(kind, "replay") || !strcmp(kind, "fusion")) return;  // no sound of their own: nothing to replay
-    if (!strcmp(kind, "drumpad")) { app->replay_map[t] = AT_APP_REPLAY_DRUMS; return; }    // the replay's own drumpad
+    if (!strcmp(kind, "replay") || !strcmp(kind, "fusion") || !strcmp(kind, "audio")) return;  // nothing recorded to replay
 
     int live = matches(app, t, kind, file) && !used[t] ? t : -1;
     for (int i = 0; live < 0 && i < (int)app->tracks.count; i++)
@@ -260,26 +308,13 @@ bool app_replay_load(AT_App* app, const char* path) {
 
     replay_stop(r);
 
-    // The drums leave the engine before their sounds are replaced.
-    if (s_drums_attached) {
-        engine_set_source(&app->engine, replay_channel(app), NULL, NULL);
-        if (!app_engine_fence(app)) {
-            engine_set_source(&app->engine, replay_channel(app), &AT_DRUMPAD_SOURCE, &s_drums);
-            printf("\ncannot load %s now: the audio thread did not answer\n", path);
-            return false;
-        }
-    }
-    drumpad_free(&s_drums);
-    drumpad_init(&s_drums, app->sample_rate);
-
     char error[200] = "";
     bool ok = replay_load(r, path, error, sizeof error);
     if (!ok) printf("\ncannot replay %s: %s\n", path, error);
 
     // Without "track" lines (a hand-written file), track N is track N.
     bool used[AT_TRACK_MAX] = { false };
-    for (int t = 0; t < AT_TRACK_MAX; t++)
-        app->replay_map[t] = t < (int)app->tracks.count && app->track_info[t].kind == AT_APP_KIND_DRUMPAD ? AT_APP_REPLAY_DRUMS : t;
+    for (int t = 0; t < AT_TRACK_MAX; t++) app->replay_map[t] = t;
     s_recorded_clock = 0;
     for (uint32_t i = 0; ok && i < r->file.count; i++) {
         const AT_LogLine* line = &r->file.lines[i];
@@ -288,17 +323,8 @@ bool app_replay_load(AT_App* app, const char* path) {
         if (!strncmp(line->text, "clock ", 6)) { s_recorded_clock = (uint64_t)strtod(line->text + 6, NULL); continue; }
 
         if (!strncmp(line->text, "track ", 6)) { map_track(app, line->text, used); continue; }
-
-        // "pad 2 S file C:\kit\snare.wav"
-        const char* file = strstr(line->text, " file ");
-        if (strncmp(line->text, "pad ", 4) || !file) continue;
-        int  pad = atoi(line->text + 4);
-        char why[160] = "";
-        if (!drumpad_load(&s_drums, pad - 1, file + 6, why, sizeof why))
-            printf("the recording's pad %d (%s) is not replayed: %s\n", pad, file + 6, why);
+        // older recordings name their pad files ("pad 2 S file ..."): the drum tracks' own files play
     }
-
-    attach_drums(app);
     return ok;
 }
 

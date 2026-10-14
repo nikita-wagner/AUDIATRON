@@ -51,7 +51,7 @@ static void add(AT_App* app, const char* name, uint16_t hotkey, uint32_t slot,
 
     app->effects[app->effect_count++] = (AT_AppEffect){
         .name = name, .hotkey = hotkey, .slot = slot,
-        .process = process, .size = size, .setup = setup
+        .process = process, .set_param = app_effect_param_fn(process), .size = size, .setup = setup
     };
 }
 
@@ -80,18 +80,29 @@ int app_effect_find(const AT_App* app, const char* name) {
     return -1;
 }
 
+void* app_effect_state_channel(AT_App* app, uint32_t index, uint32_t channel) {
+    if (index >= app->effect_count || channel >= AT_ENGINE_CHANNELS) return NULL;
+    AT_AppEffect* fx = &app->effects[index];
+
+    // First use on this channel: a fresh instance, set up before the engine sees it.
+    if (!fx->state[channel]) {
+        fx->state[channel] = calloc(1, fx->size);
+        if (!fx->state[channel]) return NULL;
+        fx->setup(fx->state[channel], app->sample_rate);
+        if (fx->process == echo_process)                    // the channel's echo time, set before it plays
+            echo_set_time_ms((AT_Echo*)fx->state[channel], app->echo_ms[channel]);
+        // A recording that is running gets the new instance's settings, so its replay starts the
+        // effect the same way, whatever an earlier pass left in the replay's own instance.
+        app_record_effect(app, channel, index);
+    }
+    return fx->state[channel];
+}
+
 bool app_effect_set_channel(AT_App* app, uint32_t index, uint32_t channel, bool enabled) {
     if (index >= app->effect_count || channel >= AT_ENGINE_CHANNELS) return false;
     AT_AppEffect* fx = &app->effects[index];
 
-    // First use on this channel: a fresh instance, set up before the engine sees it.
-    if (enabled && !fx->state[channel]) {
-        fx->state[channel] = calloc(1, fx->size);
-        if (!fx->state[channel]) return false;
-        fx->setup(fx->state[channel], app->sample_rate);
-        if (fx->process == echo_process)                    // the channel's echo time, set before it plays
-            echo_set_time_ms((AT_Echo*)fx->state[channel], app->echo_ms[channel]);
-    }
+    if (enabled && !app_effect_state_channel(app, index, channel)) return false;
 
     fx->enabled[channel] = enabled;
     engine_set_hook(&app->engine, AT_HOOK_CHANNEL, channel, fx->slot,
@@ -121,8 +132,8 @@ int app_set_echo_ms(AT_App* app, uint32_t track, int ms) {
     ms = app_set_echo_ms_channel(app, app->tracks.tracks[track].channel, ms);
 
     // the drumpad's pads have their own echoes: the same time for all of them
-    if (app->track_info[track].kind == AT_APP_KIND_DRUMPAD && app->drumpad)
-        for (int p = 0; p < AT_DRUMPAD_PADS; p++) drumpad_set_echo_ms(app->drumpad, p, ms);
+    if (app->track_info[track].kind == AT_APP_KIND_DRUMPAD)
+        for (int p = 0; p < AT_DRUMPAD_PADS; p++) drumpad_set_echo_ms((AT_Drumpad*)app->tracks.tracks[track].instrument.self, p, ms);
     return ms;
 }
 

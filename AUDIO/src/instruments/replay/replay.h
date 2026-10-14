@@ -1,16 +1,13 @@
 // ═══════════════════════════════════════════════════════════════════════════
 //  instruments/replay/replay.h — plays an input recording back, on time
 //
-//  The replay track's instrument. It reads a recording (recording/event_log)
-//  and hands every timed line to its host at the right moment; the host (the
-//  app) knows what a line means and plays it on its copies of the tracks:
-//  notes on the piano and layer copies, songs on the player copies, pads on
-//  the replay's drumpad, track volume and effects on the copies' channels.
-//
-//      P   play from the start / stop          L   loop the recording on / off
-//      Left / Right (or Up / Down)   the previous / next recording in the
-//          folder (.txt, in name order, wrapping around); a playing replay
-//          goes straight on with the new one
+//  Plays a recording: it reads one (recording/event_log) and hands every timed
+//  line to its host at the right moment; the host (the app) knows what a line
+//  means and plays it on its copies of the tracks: notes on the piano and
+//  layer copies, songs on the player copies, pads on the drum tracks' copies,
+//  track volume and effects on the copies' channels. It has no track of its
+//  own: the console plays the last take with F8, AudioStudio plays the .txt
+//  regions of its audio tracks with it (replay_play_part).
 //
 //  Timing: lines are handed over AT_REPLAY_LOOKAHEAD_MS before they are due,
 //  each with its exact engine frame; the host sends it with engine_at(), so
@@ -19,8 +16,7 @@
 //  and a late control thread only shortens the lookahead.
 //
 //  Files in this folder:
-//    replay.c          load, transport, handing lines to the host, AT_Instrument
-//    replay_keys.c     P and L
+//    replay.c          load, transport, handing lines to the host
 // ═══════════════════════════════════════════════════════════════════════════
 
 #pragma once
@@ -67,9 +63,12 @@ typedef struct {
     // transport, control thread
     bool            playing;
     bool            loop;
-    uint64_t        start;                  // engine frame of time 0 of the pass being sent
+    uint64_t        start;                  // engine frame where the pass begins (its time from_s)
     uint32_t        next;                   // next line to hand over
     bool            end_sent;
+    double          from_s;                 // a part: the recording's time at `start` (0 = from its beginning)
+    double          rate;                   // a part: its speed (2 = twice as fast); 1 normally
+    uint64_t        until;                  // a part: engine frame where it stops (0 = at its end)
 } AT_Replay;
 
 void replay_init(AT_Replay* r, float sample_rate, AT_ReplayHost host);
@@ -88,7 +87,12 @@ void replay_set_folder(AT_Replay* r, const char* folder);
 // host; a playing replay goes on with it. false = none there / it would not load.
 bool replay_select(AT_Replay* r, int step);
 
-void replay_play    (AT_Replay* r);         // from the start
+void replay_play    (AT_Replay* r);         // from the start; on a synced track on the sync clock's next bar
+// A part of the recording, for an arrangement: its time `from_s` sounds at engine
+// frame `at`, played `rate` times as fast (event times scaled: a stretch), and it
+// stops at engine frame `until` (0 = its end). Settings recorded before `from_s`
+// are applied at `at`; its notes and hits there are left out.
+void replay_play_part(AT_Replay* r, uint64_t at, double from_s, double rate, uint64_t until);
 void replay_stop    (AT_Replay* r);
 void replay_set_loop(AT_Replay* r, bool loop);
 
@@ -99,9 +103,4 @@ void replay_pump(AT_Replay* r);
 double replay_position_seconds(const AT_Replay* r);
 static inline bool replay_is_playing(const AT_Replay* r) { return r->playing; }
 
-AT_Instrument replay_instrument(AT_Replay* r);
 
-// ─── used between the files of this folder ───────────────────────────────────
-
-bool replay_key(AT_Replay* r, const AT_KeyEvent* ev);               // replay_keys.c
-extern const char REPLAY_HELP[];                                    // replay_keys.c

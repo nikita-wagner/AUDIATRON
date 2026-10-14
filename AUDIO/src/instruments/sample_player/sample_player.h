@@ -82,7 +82,8 @@ void sample_player_set_loop       (AT_SamplePlayer* p, bool loop);
 // Plays only from..to of the file (fractions of its length, e.g. 0.2 .. 0.9);
 // play, stop, loop and seeking stay inside. false = out of order / outside 0..1.
 bool sample_player_set_cut        (AT_SamplePlayer* p, float from, float to);
-void sample_player_play           (AT_SamplePlayer* p);
+void sample_player_play           (AT_SamplePlayer* p);    // on a synced track the song joins the sync clock
+void sample_player_play_now       (AT_SamplePlayer* p);    // from where it stands, never synced (a sequencer placed it)
 void sample_player_pause          (AT_SamplePlayer* p);
 void sample_player_stop           (AT_SamplePlayer* p);
 void sample_player_seek_seconds   (AT_SamplePlayer* p, double seconds);     // absolute

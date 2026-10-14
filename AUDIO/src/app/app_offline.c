@@ -32,13 +32,12 @@ int app_run_offline(AT_App* app) {
         app_teardown(app);
         return 1;
     }
-    // the fusion track has no sound of its own: its demo plays the keyboard part
-    const bool     fusion       = app->fusion && (int)app->tracks.selected == app->fusion_track;
-    const uint32_t demo_channel = fusion ? app->tracks.tracks[app->fusion_keyboard_track].channel : track->channel;
+    const uint32_t demo_channel = track->channel;
 
-    // A player starts its file; other instruments get the built-in arpeggio.
-    const bool own_demo = track->instrument.demo_start != NULL;
-    if (own_demo) track->instrument.demo_start(track->instrument.self);
+    // --replay: the recording plays (it was started by app_setup). Otherwise a
+    // player starts its file; other instruments get the built-in arpeggio.
+    const bool own_demo = track->instrument.demo_start != NULL || o->replay_path != NULL;
+    if (track->instrument.demo_start && !o->replay_path) track->instrument.demo_start(track->instrument.self);
 
     AT_WavWriter wav;
     if (!wav_writer_open(&wav, o->offline_path, rate, AT_MAX_CHANNELS)) {

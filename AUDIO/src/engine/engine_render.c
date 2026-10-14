@@ -80,4 +80,5 @@ void engine_render(AT_Buffer* out, void* user) {
         render_block(e, &slice);
         done += n;
     }
+    engine_sync_publish(e);                                 // where the sync clock stands, for the control threads
 }

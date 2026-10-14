@@ -33,7 +33,7 @@ void app_print_help(const AT_App* app) {
     }
 
     printf(" recording (files in %s\\, numbered: rec_001.txt / rec_001.wav, never overwritten)\n"
-           "  F5  input on/off (keys + drum states as text; stopping it loads it into the replay track)\n"
+           "  F5  input on/off (keys + drum states as text)    F8  play the last take back (on copies of the tracks)\n"
            "  F6  WAV on/off      F7  both on/off together\n",
            app->options.record_dir ? app->options.record_dir : "recordings");
 
@@ -86,8 +86,6 @@ bool app_on_tick(void* user) {
     // E held: the echo time it changes, also while the echo is off
     if (app->e_held && track && used < sizeof effects_text) {
         uint32_t t = app->tracks.selected;
-        if (app->fusion && (int)t == app->fusion_track)
-            t = (uint32_t)(fusion_pad_held(app->fusion) ? app->fusion_drum_track : app->fusion_keyboard_track);
         snprintf(effects_text + used, sizeof effects_text - used, "(E: echo %dms on track %u) ", app_echo_ms(app, t), t + 1);
     }
 

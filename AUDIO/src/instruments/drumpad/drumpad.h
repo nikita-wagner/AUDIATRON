@@ -179,7 +179,8 @@ typedef struct {
 
 typedef struct {
     bool          loaded;
-    AT_Clip       clip;                     // the decoded file (owned)
+    AT_Clip       clip;                     // the decoded file (owned, unless shared)
+    bool          shared;                   // the clip's samples belong to another drumpad (a copy's pads)
     AT_Sampler    sampler;                  // the pad's sound (a layer of the stack)
     AT_PitchShift shifter;                  // layer insert 0; idle unless the pad is in keep-tempo mode
     int           layer;                    // index in the stack, -1 = not in it (yet)
@@ -262,6 +263,10 @@ void drumpad_init(AT_Drumpad* d, float sample_rate);
 // false = failed, `error` says why.
 bool drumpad_load(AT_Drumpad* d, int pad, const char* path, char* error, size_t error_cap);
 void drumpad_free(AT_Drumpad* d);           // frees every loaded file
+// A copy that plays the same files (sharing them, not loading them again) with
+// its own settings: recordings are replayed on it (app_replay.c). The original
+// must outlive it and stay loaded; both before attach.
+void drumpad_init_copy(AT_Drumpad* copy, const AT_Drumpad* original, float sample_rate);
 
 int  drumpad_loaded_count(const AT_Drumpad* d);
 

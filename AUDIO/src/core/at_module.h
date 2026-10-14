@@ -29,4 +29,5 @@ typedef struct {
     void (*note_on)      (void* self, int note, float velocity);    // optional — NULL = ignores notes
     void (*note_off)     (void* self, int note);
     void (*all_notes_off)(void* self);
+    bool (*playing)      (void* self);   // optional, audio thread: a loop / song of it plays (the sync clock runs while one does)
 } AT_SourceType;

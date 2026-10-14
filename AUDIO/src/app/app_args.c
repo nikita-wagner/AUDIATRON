@@ -104,7 +104,9 @@ static void print_usage(void) {
            "                           \"kick.mp3(0.5)\" = the first half, \"song.mp3(30s,45s)\". Quote it in PowerShell.\n"
            "                           On a --pad two more: wait and play for, \"kick.wav(250ms,1000ms,2000ms,1000ms)\"\n"
            "                           = 2 s after a press, 250..1000 ms of the file, sounding for 1 s.\n"
-           "  --replay FILE            load an input recording (F5) into the replay track, which plays it back\n"
+           "  --machine FILE|NAME      the machine track: a WAV / MP3, a saved engine (.atengine: its sound and setup),\n"
+           "                           or petrol, jet, propeller, rocket (default petrol)\n"
+           "  --replay FILE            play an input recording (F5) back from the start, on copies of the tracks (F8 again)\n"
            "  --record-dir DIR         where F5 / F6 / F7 save recordings (default: recordings)\n"
            "  --pitch SEMITONES        start pitch of the players, e.g. -3 or 5\n"
            "  --speed FACTOR           start speed of the players, e.g. 0.8 or 1.25\n"
@@ -156,6 +158,7 @@ bool app_parse_args(AT_AppOptions* o, int argc, char** argv) {
         }
         else if (!strcmp(a, "--pads")      && has_next)   o->pad_folder   = argv[++i];
         else if (!strcmp(a, "--replay")    && has_next)   o->replay_path  = argv[++i];
+        else if (!strcmp(a, "--machine")   && has_next)   o->machine_path = argv[++i];
         else if (!strcmp(a, "--record-dir") && has_next)  o->record_dir   = argv[++i];
         else if (!strcmp(a, "--fx")        && has_next) {
             if (o->fx_count == AT_APP_MAX_FX_FLAGS) { fprintf(stderr, "too many --fx options\n"); return false; }

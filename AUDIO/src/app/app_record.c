@@ -34,6 +34,8 @@
 #include <stdio.h>
 
 #include "input/key_names/key_names.h"
+#include "layers/layer_stack.h"
+#include "synth/synth.h"
 
 #define WAV_HOOK_SLOT  (AT_ENGINE_HOOK_SLOTS - 1)   // the last touch: the file gets what the device gets
 #define FENCE_MS       2000
@@ -134,22 +136,79 @@ void app_record_key(AT_App* app, const AT_KeyEvent* ev) {
     app_record_note(app, "key %s %s", name, ev->down ? "down" : "up");
 }
 
-// Drumpad changes while recording.
+// Drumpad changes while recording, with the drum track they happened on: "track 3 pad 2 S hit 0.8".
+typedef struct { AT_App* app; int track; } PadContext;
+static PadContext s_pad_context[AT_TRACK_MAX];
+
 static void on_pad_event(void* user, const AT_PadEvent* ev) {
-    AT_App* app = (AT_App*)user;
-    char    text[96];
+    const PadContext* c = (const PadContext*)user;
+    char text[96];
     drumpad_event_format(ev, text, sizeof text);
-    app_record_note(app, "%s", text);
+    app_record_note(c->app, "track %d %s", c->track + 1, text);
+}
+
+static AT_Drumpad* drum_of(const AT_App* app, uint32_t t) {
+    return app->track_info[t].kind == AT_APP_KIND_DRUMPAD ? (AT_Drumpad*)app->tracks.tracks[t].instrument.self : NULL;
 }
 
 // Notes and parameter changes of the instruments, from the engine.
+// A parameter of something that is not a target itself: a track's effect ("track 2 tremolo rate 4.5"),
+// or a layer's synth or insert effect ("track 2 layers 2 tremolo depth 0.3"). Anything else (drumpad
+// internals, the replay's copies) is not recorded.
+static void record_object_param(AT_App* app, const AT_EngineEvent* ev) {
+    char words[64];
+    if (!app_object_param_format(ev->fn, ev->param, ev->value, words, sizeof words)) return;
+
+    for (uint32_t t = 0; t < app->tracks.count; t++) {
+        const uint32_t channel = app->tracks.tracks[t].channel;
+        for (uint32_t fx = 0; fx < app->effect_count; fx++)
+            if (app->effects[fx].state[channel] == ev->self) {
+                app_record_note(app, "track %u %s %s", t + 1, app->effects[fx].name, words);
+                return;
+            }
+    }
+    for (uint32_t i = 0; i < app->target_count; i++) {
+        const AT_AppTarget* target = &app->targets[i];
+        if (target->fn != layer_stack_set_param) continue;
+        const AT_LayerStack* stack = (const AT_LayerStack*)target->live;
+        for (uint32_t l = 0; l < stack->count; l++) {
+            const AT_Layer* layer = &stack->layers[l];
+            bool found = layer->self == ev->self && ev->fn == synth_set_param;
+            for (int s = 0; s < AT_LAYER_INSERTS && !found; s++)
+                found = layer->inserts[s].user == ev->self && app_effect_param_fn(layer->inserts[s].fn) == ev->fn;
+            if (found) {
+                app_record_note(app, "track %d %s %u %s %s", target->track + 1, target->name, l + 1, app_object_kind(ev->fn), words);
+                return;
+            }
+        }
+    }
+}
+
+typedef struct { AT_App* app; uint64_t frame; uint32_t track; const char* name; bool now; } EffectLines;
+
+static void on_effect_line(void* user, const char* line) {
+    EffectLines* c = (EffectLines*)user;
+    if (c->now) app_record_note(c->app, "track %u %s %s", c->track, c->name, line);
+    else        event_log_write(&c->app->record.log, c->frame, "track %u %s %s", c->track, c->name, line);
+}
+
+void app_record_effect(AT_App* app, uint32_t channel, uint32_t fx) {
+    if (!app->record.input_on || fx >= app->effect_count || !app->effects[fx].set_param) return;
+    for (uint32_t t = 0; t < app->tracks.count; t++)
+        if (app->tracks.tracks[t].channel == channel) {     // a live track's (not a replay copy's)
+            EffectLines c = { app, 0, t + 1, app->effects[fx].name, true };
+            app_object_snapshot(app->effects[fx].set_param, app->effects[fx].state[channel], on_effect_line, &c);
+            return;
+        }
+}
+
 static void on_engine_event(void* user, const AT_EngineEvent* ev) {
     AT_App* app = (AT_App*)user;
     if (!app->record.input_on) return;
 
     if (ev->type == AT_ENGINE_EV_PARAM) {
         const AT_AppTarget* t = app_target_find_live(app, ev->fn, ev->self);
-        if (!t) return;                                     // not a live track's (drumpad internals, the replay's copies)
+        if (!t) { record_object_param(app, ev); return; }
         char text[96];
         app_param_format(t, ev->param, ev->value, text, sizeof text);
         app_record_note(app, "track %d %s", t->track + 1, text);
@@ -162,7 +221,7 @@ static void on_engine_event(void* user, const AT_EngineEvent* ev) {
         if ((int)app->tracks.tracks[i].channel == ev->channel) track = (int)i;
     if (track < 0) return;
     AT_AppKind kind = app->track_info[track].kind;
-    if (kind == AT_APP_KIND_DRUMPAD || kind == AT_APP_KIND_REPLAY) return;
+    if (kind == AT_APP_KIND_DRUMPAD) return;
 
     switch (ev->type) {
     case AT_ENGINE_EV_NOTE_ON:       app_record_note(app, "track %d note %d on %.9g", track + 1, ev->note, ev->value); break;
@@ -196,15 +255,21 @@ static void write_track_state(AT_App* app) {
 
     for (uint32_t t = 0; t < app->tracks.count; t++) {
         const AT_Track* track = &app->tracks.tracks[t];
-        if (app->track_info[t].kind == AT_APP_KIND_REPLAY || app->track_info[t].kind == AT_APP_KIND_FUSION) continue;
         event_log_write(log, start, "track %u volume %.9g", t + 1, track->volume);
         event_log_write(log, start, "track %u pan %.9g", t + 1, track->pan);
         event_log_write(log, start, "track %u mute %s", t + 1, track->mute ? "on" : "off");
         event_log_write(log, start, "track %u solo %s", t + 1, track->solo ? "on" : "off");
         event_log_write(log, start, "track %u hold %s", t + 1, track->hold ? "on" : "off");
         event_log_write(log, start, "track %u echo_ms %d", t + 1, app_echo_ms(app, t));
-        for (uint32_t fx = 0; fx < app->effect_count; fx++)
-            if (app_effect_enabled(app, fx, t)) event_log_write(log, start, "track %u %s on", t + 1, app->effects[fx].name);
+        for (uint32_t fx = 0; fx < app->effect_count; fx++) {
+            // every instance the track has, on or off: its settings, then whether it is on
+            const AT_AppEffect* effect = &app->effects[fx];
+            if (effect->state[track->channel] && effect->set_param) {
+                EffectLines c = { app, start, t + 1, effect->name, false };
+                app_object_snapshot(effect->set_param, effect->state[track->channel], on_effect_line, &c);
+            }
+            if (app_effect_enabled(app, fx, t)) event_log_write(log, start, "track %u %s on", t + 1, effect->name);
+        }
     }
     for (uint32_t i = 0; i < app->target_count; i++) {
         SnapshotContext c = { app, app->targets[i].track };
@@ -214,10 +279,10 @@ static void write_track_state(AT_App* app) {
 
 // The drum state at time 0.
 static void on_snapshot(void* user, const AT_PadEvent* ev) {
-    AT_App* app = (AT_App*)user;
-    char    text[96];
+    const PadContext* c = (const PadContext*)user;
+    char text[96];
     drumpad_event_format(ev, text, sizeof text);
-    event_log_write(&app->record.log, app->record.log.start_frame, "%s", text);
+    event_log_write(&c->app->record.log, c->app->record.log.start_frame, "track %d %s", c->track + 1, text);
 }
 
 static void start_input(AT_App* app) {
@@ -230,33 +295,25 @@ static void start_input(AT_App* app) {
     }
 
     event_log_header(&r->log, "# AUDIATRON input recording. One event per line: seconds since the start, then what happened.");
-    event_log_header(&r->log, "# \"key\" lines are what was pressed; \"pad\" lines are what the drumpad did (the replay plays those).");
+    event_log_header(&r->log, "# \"key\" lines are what was pressed; \"track N pad\" lines are what a drumpad did (the replay plays those).");
     event_log_header(&r->log, "audiatron recording 1");
     event_log_header(&r->log, "rate %u", (unsigned)app->sample_rate);
     // the engine frame at time 0: a replay runs its copies' LFOs in the same phase
     event_log_header(&r->log, "clock %.0f", (double)r->log.start_frame);
     write_tracks(app);
 
-    AT_Drumpad* d = app->drumpad;
-    if (d) {
-        // full paths: the replay may run from another folder
-        for (int i = 0; i < AT_DRUMPAD_PADS; i++) {
-            if (!d->pads[i].loaded) continue;
-            char full[260], key[16];
-            if (!GetFullPathNameA(d->pads[i].path, sizeof full, full, NULL)) snprintf(full, sizeof full, "%s", d->pads[i].path);
-            key_name(drumpad_pad_key(i), key, sizeof key);
-            event_log_header(&r->log, "pad %d %s file %s", i + 1, key, full);
-        }
-    }
     if (r->wav_on && r->wav.started)
         event_log_header(&r->log, "# %s was already recording; it started %.6f s before this file's time 0",
                          r->wav_path, (double)(r->log.start_frame - r->wav.first_frame) / app->sample_rate);
 
     r->input_on = true;
     write_track_state(app);
-    if (d) {
-        drumpad_snapshot(d, on_snapshot, app);
-        drumpad_set_observer(d, on_pad_event, app);
+    for (uint32_t t = 0; t < app->tracks.count; t++) {
+        AT_Drumpad* d = drum_of(app, t);
+        if (!d) continue;
+        s_pad_context[t] = (PadContext){ app, (int)t };
+        drumpad_snapshot(d, on_snapshot, &s_pad_context[t]);
+        drumpad_set_observer(d, on_pad_event, &s_pad_context[t]);
     }
     engine_set_observer(&app->engine, on_engine_event, app);
     const AT_Track* t = track_list_selected(&app->tracks);
@@ -268,14 +325,15 @@ static void stop_input(AT_App* app, bool load_into_replay) {
     AT_AppRecord* r = &app->record;
     if (!r->input_on) return;
 
-    if (app->drumpad) drumpad_set_observer(app->drumpad, NULL, NULL);
+    for (uint32_t t = 0; t < app->tracks.count; t++)
+        if (drum_of(app, t)) drumpad_set_observer(drum_of(app, t), NULL, NULL);
     engine_set_observer(&app->engine, NULL, NULL);
     event_log_close(&r->log, app_now(app));
     r->input_on = false;
     printf("\nsaved %s\n", r->input_path);
 
     if (load_into_replay && app->replay && app_replay_load(app, r->input_path))
-        printf("loaded into track %d (replay): Tab there, P plays it\n", app->replay_track + 1);
+        printf("F8 plays it back (on copies of the tracks: you can play along)\n");
 }
 
 // ─── WAV recording ───────────────────────────────────────────────────────────
@@ -325,6 +383,10 @@ bool app_record_hotkey(AT_App* app, uint16_t scan) {
         return true;
     case AT_SC_F6:
         if (r->wav_on) stop_wav(app); else start_wav(app);
+        return true;
+    case AT_SC_F8:                                          // the last take (or --replay) plays / stops
+        if (!app->replay || !app->replay->loaded) { printf("\nnothing to play yet: record with F5 first\n"); return true; }
+        if (replay_is_playing(app->replay)) replay_stop(app->replay); else replay_play(app->replay);
         return true;
     case AT_SC_F7:
         if (r->input_on || r->wav_on) {                     // stop whatever runs

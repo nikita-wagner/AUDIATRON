@@ -17,14 +17,9 @@
 
 static const char* on_off(bool on) { return on ? "on" : "off"; }
 
-// The track that track keys (volume, mute, solo, hold, effects) act on: the
-// selected one; on the fusion track the one it plays (the drumpad while a
-// numpad pad is held, else the keyboard's track).
+// The track that track keys (volume, mute, solo, hold, effects) act on: the selected one.
 static uint32_t key_track(const AT_App* app) {
-    uint32_t t = app->tracks.selected;
-    if (app->fusion && (int)t == app->fusion_track)
-        t = (uint32_t)(fusion_pad_held(app->fusion) ? app->fusion_drum_track : app->fusion_keyboard_track);
-    return t;
+    return app->tracks.selected;
 }
 
 // Effects are per track: the hotkey switches the effect on the selected track only.
@@ -134,13 +129,19 @@ bool app_on_key(void* user, const AT_KeyEvent* ev) {
         return false;
     case AT_SC_SPACE:
         engine_all_notes_off(&app->engine, -1);
-        if (app->drumpad) drumpad_pattern_stop(app->drumpad);    // the pattern stops too, like the loops
+        for (uint32_t t = 0; t < app->tracks.count; t++)  // the patterns stop too, like the loops
+            if (app->track_info[t].kind == AT_APP_KIND_DRUMPAD)
+                drumpad_pattern_stop((AT_Drumpad*)app->tracks.tracks[t].instrument.self);
         app_record_note(app, "all notes off");              // the replay stops its loops here too
         break;
     case AT_SC_TAB:
         track_list_select_next(&app->tracks);
         track = track_list_selected(&app->tracks);
         if (track) app_record_note(app, "track %u select %s", app->tracks.selected + 1, track->instrument.name);
+        break;
+    case AT_SC_P:                                           // the machine's own keys leave P to us
+        if (app->tracks.selected < app->tracks.count && app->track_info[app->tracks.selected].kind == AT_APP_KIND_MACHINE)
+            app_save_machine(app);
         break;
     case AT_SC_B:
         app->master_eq_bypass = !app->master_eq_bypass;

@@ -49,8 +49,19 @@ void sample_player_free(AT_SamplePlayer* p) {
 
 // ─── AT_Instrument adapter ───────────────────────────────────────────────────
 
+// The sampler asks this when its song starts: on a synced track it joins the
+// engine's sync clock (audio thread).
+static bool player_sync(void* user, double* elapsed) {
+    AT_SamplePlayer* p = (AT_SamplePlayer*)user;
+    if (!engine_channel_synced(p->engine, p->channel)) return false;
+    *elapsed = engine_sync_join(p->engine, p->channel);
+    return true;
+}
+
 static void player_attach(void* self, AT_Engine* engine, uint32_t channel) {
     AT_SamplePlayer* p = (AT_SamplePlayer*)self;
+    p->sampler.sync      = player_sync;
+    p->sampler.sync_user = p;
 
     // Nothing is plugged in yet, so the settings (loop, --pitch, --speed) can still be written directly.
     sampler_set_param(&p->sampler, AT_SAMPLER_PARAM_LOOP, p->loop ? 1.0f : 0.0f);

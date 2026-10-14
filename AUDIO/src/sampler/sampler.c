@@ -207,7 +207,14 @@ void sampler_set_param(void* self, int param, float value) {
     AT_Sampler* s = (AT_Sampler*)self;
 
     switch ((AT_SamplerParam)param) {
-    case AT_SAMPLER_PARAM_PLAY:  transport_play(s);                                   break;
+    case AT_SAMPLER_PARAM_PLAY: {
+        double elapsed = 0.0;
+        if (value < 0.5f && !transport_voice(s) && s->sync && s->sync(s->sync_user, &elapsed))
+            sampler_play_elapsed(s, elapsed);               // joins the sync clock in phase
+        else
+            transport_play(s);
+        break;
+    }
     case AT_SAMPLER_PARAM_PAUSE: {
         AT_SamplerVoice* v = transport_voice(s);
         if (v) v->paused = value != 0.0f;

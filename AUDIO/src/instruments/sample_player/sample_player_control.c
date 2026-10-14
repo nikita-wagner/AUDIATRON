@@ -70,6 +70,7 @@ bool sample_player_set_cut(AT_SamplePlayer* p, float from, float to) {
 }
 
 void sample_player_play (AT_SamplePlayer* p) { set_sampler(p, AT_SAMPLER_PARAM_PLAY,  0.0f); }
+void sample_player_play_now(AT_SamplePlayer* p) { set_sampler(p, AT_SAMPLER_PARAM_PLAY, 1.0f); }
 void sample_player_pause(AT_SamplePlayer* p) { set_sampler(p, AT_SAMPLER_PARAM_PAUSE, 1.0f); }
 void sample_player_stop (AT_SamplePlayer* p) { set_sampler(p, AT_SAMPLER_PARAM_STOP,  0.0f); }
 

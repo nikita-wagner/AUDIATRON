@@ -14,7 +14,7 @@
 //    app_keys.c          what a key press does (control thread callback)
 //    app_record.c        F5 / F6 / F7: input and WAV recording
 //    app_params.c        the names of instrument parameters in a recording
-//    app_replay.c        plays a recording on copies of the tracks (the replay track)
+//    app_replay.c        plays a recording on copies of the tracks (F8, the audio track's .txt regions)
 //    app_status.c        status line + help text (control thread callback)
 //    app_live.c          live mode: device → audio thread → control loop
 //    app_offline.c       --offline: render a demo into a WAV file, no device
@@ -26,7 +26,7 @@
 #include "engine/engine.h"
 #include "input/key_event.h"
 #include "instruments/drumpad/drumpad.h"
-#include "instruments/fusion/fusion.h"
+#include "instruments/audio_track/audio_track.h"
 #include "instruments/replay/replay.h"
 #include "recording/event_log/event_log.h"
 #include "recording/wav_recorder/wav_recorder.h"
@@ -56,6 +56,23 @@ typedef struct {
     bool  timed;                                // wait / play for were given
     float wait_s, play_s;                       // seconds
 } AT_AppCut;
+
+// One track of the TRACK LIST: which instrument, with which files. AudioStudio
+// passes its own list (any instrument any number of times); the console builds
+// one from its options (app_instruments.c).
+typedef struct {
+    int              kind;                      // AT_AppKind
+    const char*      file;                      // player / sampler: the sound file. machine: a WAV / MP3, a built-in
+                                                //   name (petrol, jet, propeller, rocket) or a saved engine (.atengine);
+                                                //   NULL = the built-in petrol engine
+    const AT_AppCut* cut;                       // player / sampler: the part to play, NULL = all
+    const char*      pads[AT_APP_MAX_PADS];     // drumpad: these files on pads 1, 2, ...
+    const AT_AppCut* pad_cuts[AT_APP_MAX_PADS]; //   and their parts (NULL = all)
+    uint32_t         pad_count;
+    const char*      pad_folder;                // drumpad: then the files of this folder
+    bool             default_kit;               // drumpad: no files, no folder: the "sample" folder (left out if missing)
+    bool             from_command_line;         // the console selects the first such track
+} AT_AppTrackSpec;
 
 typedef struct {
     AT_AppMode   mode;
@@ -88,7 +105,13 @@ typedef struct {
     uint32_t     pad_count;
     const char*  pad_folder;
 
-    const char*  replay_path;                   // --replay FILE: a recording for the replay track
+    const char*  machine_path;                  // --machine FILE: the machine track's sound (default: a built-in engine)
+    bool         audio_track;                   // add the audio track (sound files on a timeline; AudioStudio)
+    const char*  replay_path;                   // --replay FILE: a recording, played at the start (F8 again)
+
+    // AudioStudio: exactly these tracks, in this order (0 = the console's list from the options above)
+    AT_AppTrackSpec track_specs[AT_TRACK_MAX];
+    uint32_t        track_spec_count;
     const char*  record_dir;                    // --record-dir DIR, where F5 / F6 / F7 save (default "recordings")
 } AT_AppOptions;
 
@@ -101,6 +124,7 @@ typedef struct {
     uint16_t     hotkey;                        // AT_SC_* that toggles it on the selected track
     uint32_t     slot;                          // AT_HOOK_CHANNEL slot: the order effects run in
     AT_ProcessFn process;
+    AT_ParamFn   set_param;                     // changes its settings (engine_set_param); recordings follow it
     size_t       size;                          // bytes of one instance
     void       (*setup)(void* state, float sample_rate);    // gives a fresh instance the app's sound
     void*        state  [AT_ENGINE_CHANNELS];   // per channel, NULL = never switched on there
@@ -114,14 +138,16 @@ typedef enum {
     AT_APP_KIND_PLAYER,
     AT_APP_KIND_SAMPLER,
     AT_APP_KIND_DRUMPAD,
-    AT_APP_KIND_REPLAY,
-    AT_APP_KIND_FUSION
+    AT_APP_KIND_MACHINE,
+    AT_APP_KIND_AUDIO                           // sound files on a timeline (instruments/audio_track), for an arrangement
 } AT_AppKind;
 
 typedef struct {
     AT_AppKind    kind;
     char          file[260];                    // player / sampler: the file, full path
     bool          has_copy;                     // a copy for the replay sits on channel + AT_TRACK_MAX
+    void*         copy;                         // that copy (the same type as the track's instrument), NULL = none
+    int           spec;                         // its entry in the track list
 } AT_AppTrackInfo;
 
 // Something on a track whose parameters a recording follows, e.g. the
@@ -135,10 +161,9 @@ typedef struct {
     void*        copy;
 } AT_AppTarget;
 
-#define AT_APP_MAX_TARGETS  32
+#define AT_APP_MAX_TARGETS  (AT_TRACK_MAX * 3)
 #define AT_APP_ECHO_MS      350             // echo time a track starts with
 #define AT_APP_ECHO_STEP_MS 25              // E + '+' / '-'
-#define AT_APP_REPLAY_DRUMS (-2)
 
 // What is being recorded right now (app_record.c).
 typedef struct {
@@ -174,13 +199,10 @@ typedef struct {
     float          master_volume;
     bool           master_eq_bypass;
 
-    AT_Drumpad*    drumpad;                                 // the live drumpad, NULL = none
-    AT_Replay*     replay;                                  // the replay track's instrument, NULL = none
-    int            replay_track;                            // its track, -1 = none
-    AT_Fusion*     fusion;                                  // the fusion track: keyboard + numpad drums, NULL = none
-    int            fusion_track;                            // its track, -1 = none
-    int            fusion_keyboard_track;                   // the tracks it plays
-    int            fusion_drum_track;
+    AT_Drumpad*    drumpad;                                 // the first drumpad track's, NULL = none
+    AT_Replay*     replay;                                  // plays recordings on the copies (app_replay.c); no track of its own
+    AT_AudioTrack* audio;                                   // the first audio track's, NULL = none
+    int            audio_track;                             // its track, -1 = none
     AT_AppRecord   record;
 
     AT_AppTrackInfo track_info[AT_TRACK_MAX];               // what each track is (app_instruments.c)
@@ -189,8 +211,7 @@ typedef struct {
 
     // the replay's view of the recording's tracks (app_replay.c)
     int            replay_map[AT_TRACK_MAX];                // the recording's track t plays on the copy of this
-                                                            // program's track replay_map[t]; -1 = nowhere,
-                                                            // AT_APP_REPLAY_DRUMS = the replay's own drumpad
+                                                            // program's track replay_map[t]; -1 = nowhere
     bool           replay_mute[AT_TRACK_MAX];
     bool           replay_solo[AT_TRACK_MAX];
 } AT_App;
@@ -212,6 +233,11 @@ void app_teardown(AT_App* app);
 // ─── app_instruments.c ───────────────────────────────────────────────────────
 bool app_instruments_setup(AT_App* app, float sample_rate);  // fills app->tracks; false = a sound file would not load
 void app_instruments_teardown(AT_App* app);                  // frees the loaded sound files
+void app_save_machine(AT_App* app);                          // P on the machine track: machines\machine_NNN.atengine
+// Sync: the track joins the engine's sync clock (engine/engine_sync.c): its loops start in
+// phase with the other synced tracks', its notes and hits wait for the clock's grid.
+void app_set_track_sync(AT_App* app, uint32_t track, bool on);
+bool app_track_sync    (const AT_App* app, uint32_t track);
 
 // ─── app_effects.c ───────────────────────────────────────────────────────────
 void app_effects_setup   (AT_App* app);
@@ -221,6 +247,9 @@ int  app_effect_find     (const AT_App* app, const char* name);         // -1 = 
 bool app_effect_set      (AT_App* app, uint32_t index, uint32_t track, bool enabled);
 // The same on any engine channel (the replay's copies of tracks).
 bool app_effect_set_channel(AT_App* app, uint32_t index, uint32_t channel, bool enabled);
+// The effect's instance on a channel, made (switched off, at the app's sound) if there is none yet.
+// For setting it up before it is switched on (the replay). NULL = no memory.
+void* app_effect_state_channel(AT_App* app, uint32_t index, uint32_t channel);
 bool app_effect_enabled  (const AT_App* app, uint32_t index, uint32_t track);
 
 // The echo time of one track, in ms (1 .. ~2700 at 48 kHz). On the drumpad
@@ -239,6 +268,7 @@ bool app_record_hotkey (AT_App* app, uint16_t scan);        // F5 / F6 / F7; tru
 void app_record_key    (AT_App* app, const AT_KeyEvent* ev);   // logs a key while recording input
 void app_record_note   (AT_App* app, const char* fmt, ...);    // logs an app event ("track 2 select layers")
 void app_record_tick   (AT_App* app);                       // moves recorded audio to the WAV file
+void app_record_effect (AT_App* app, uint32_t channel, uint32_t fx);  // logs a new effect instance's settings
 void app_record_status (const AT_App* app, char* out, size_t cap);
 void app_record_shutdown(AT_App* app);                      // closes what is open (audio thread stopped)
 
@@ -250,10 +280,23 @@ void app_target_snapshot(const AT_AppTarget* t, void (*emit)(void* user, const c
 const AT_AppTarget* app_target_find_live(const AT_App* app, AT_ParamFn fn, const void* self);
 const AT_AppTarget* app_target_find_name(const AT_App* app, int track, const char* name);
 
+// Effects and the other things inside an instrument (a layer's synth or insert effect) as words:
+//     track 2 tremolo rate 4.5            a track's effect
+//     track 2 layers 2 tremolo depth 0.3  a layer's insert effect
+//     track 2 layers 3 synth attack 0.01  a layer's synth
+// The kinds a recording knows by name: "crush", "tremolo", "echo" (effects) and "synth".
+const char* app_object_kind(AT_ParamFn fn);                 // NULL = not one of them
+AT_ParamFn  app_effect_param_fn(AT_ProcessFn process);      // the effect's AT_ParamFn, NULL = unknown
+// "rate 4.5". false = unknown, or not recorded this way (an echo's time is the track's echo_ms line)
+bool app_object_param_format(AT_ParamFn fn, int param, float value, char* out, size_t cap);
+bool app_object_param_parse (AT_ParamFn fn, const char* text, int* param, float* value);
+// Everything an instance is set to, one "name value" line each.
+void app_object_snapshot(AT_ParamFn fn, const void* object, void (*emit)(void* user, const char* line), void* user);
+
 // ─── app_replay.c ────────────────────────────────────────────────────────────
 void app_replay_setup   (AT_App* app);                      // after the tracks exist
 void app_replay_teardown(AT_App* app);
-bool app_replay_load    (AT_App* app, const char* path);    // a recording into the replay track (also while running)
+bool app_replay_load    (AT_App* app, const char* path);    // a recording into the replay (also while running)
 void app_background_tick(AT_App* app);                      // every tick / block: WAV recording, replay lookahead
 const char* app_kind_name(AT_AppKind kind);                 // "piano", "layers", "player", ...
 

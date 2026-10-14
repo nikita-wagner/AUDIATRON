@@ -22,7 +22,8 @@ audiatron --play song.mp3           add a player track for a WAV / MP3 file (pla
 audiatron --sample kick.mp3         add a track that plays the file pitched across the piano keys
 audiatron --play song.mp3 --fx echo --pitch 3 --keep-tempo     echo on, 3 semitones up, same tempo
 audiatron --pad kick.mp3 --pad snare.wav --pad loop.mp3         a drumpad: one file per key, each pitched / looped on its own
-audiatron --replay recordings\rec_001.txt                        play an input recording back on the replay track
+audiatron --replay recordings\rec_001.txt                        play an input recording back (on copies of the tracks; F8 again)
+audiatron --machine engine.wav                                   the machine track's sound (W / S throttle; default: a built-in petrol engine)
 ```
 
 Live: **F5** records every key and drum state into a text file, **F6** records a WAV, **F7** both at once (see *Recording and replay*).
@@ -87,7 +88,8 @@ src/
 │   ├── sample_keyboard/      a file pitched across the piano keys (kick → bass line)
 │   ├── drumpad/              16 pads, one file each; per-pad pitch, loop, volume, pan, effects, cut
 │   ├── replay/               plays an input recording back, on time (the app plays it on copies of the tracks)
-│   ├── fusion/               two instruments on one keyboard: main keys → layers, numpad → drumpad
+│   ├── machine/              mechanical sounds on a throttle: W / S, curves for gain, loop part and rate
+│   ├── audio_track/          sound files on a timeline: regions cut, stretched, reversed, faded (for an arrangement)
 │   └── _template/            ◄ copy this to start a drumpad, guitar, …
 │
 ├── input/
@@ -233,10 +235,25 @@ Keys in live mode (QWERTZ labels):
 | `E` + `+` / `-` | echo time of the track +/- 25 ms (hold to keep going); on the drumpad track also its pads' echoes |
 | `1`..`3` on track 2 | switch a layer on/off, also while notes sound |
 | `F5` / `F6` / `F7` | record input / WAV / both, on and off (works on every track) |
-| track 5 (fusion) | main keyboard → layers (track 2), numpad → drumpad (track 3), see *Fusion* |
+| `F8` | play the last take (or `--replay FILE`) back / stop it |
 | `N` / `M`, `B`, `Space`, `Esc` | master volume, master EQ on/off, all notes off, quit |
 
 To hear tracks together: go to track 2, press `Enter`, play a chord, press `Tab`, play the piano over it.
+
+**The track list.** Which tracks there are is a list (`AT_AppTrackSpec`, `options.track_specs`): each entry an instrument with its files, any instrument any number of times, up to 16 tracks. Three pianos with their own sounds, two drumpads with different kits, an engine per car:
+
+```c
+AT_AppTrackSpec* t = app.options.track_specs;
+t[0] = (AT_AppTrackSpec){ .kind = AT_APP_KIND_PIANO };
+t[1] = (AT_AppTrackSpec){ .kind = AT_APP_KIND_PIANO };
+t[2] = (AT_AppTrackSpec){ .kind = AT_APP_KIND_DRUMPAD, .pad_folder = "kits\\house" };
+t[3] = (AT_AppTrackSpec){ .kind = AT_APP_KIND_DRUMPAD, .pads = { "kick.wav", "snare.wav" }, .pad_count = 2 };
+t[4] = (AT_AppTrackSpec){ .kind = AT_APP_KIND_MACHINE, .file = "jet" };          // or a WAV, or my.atengine
+t[5] = (AT_AppTrackSpec){ .kind = AT_APP_KIND_AUDIO };
+app.options.track_spec_count = 6;
+```
+
+AudioStudio builds its arrangement this way. Without a list the console makes its usual one from the command line: piano, layered keys, a track per `--play` / `--sample` file, the drumpad, the machine. Checked: a list of two pianos, two drumpads with different kits, two engines (jet, petrol) and an audio track gave 7 tracks in that order, each with its own synth, kit and sound; a hit recorded on the second drumpad was written as `track 4 pad 2 S hit` and `F8` replayed it on that drumpad's copy (peak 0.091) while the first drumpad's copy stayed silent.
 
 Three contracts make everything pluggable (`core/at_buffer.h`, `core/at_module.h`):
 
@@ -287,7 +304,7 @@ Measured through the whole program with a pure 440 Hz tone: tape mode at +12 / �
 
 **Echo** (`effects/echo/`): 350 ms between repeats, each repeat 45 % of the last, 40 % level, a little darkening per repeat. The first repeat measures 0.40 of the original and the second 0.18 (0.40 × 0.45), as set. The echo tail keeps ringing after you stop. To change the other values edit `echo_setup` in `app/app_effects.c` (`_FEEDBACK`, `_MIX`, `_DAMPING`, `_PING_PONG` can also be sent while it runs with `engine_set_param`).
 
-**Echo time, live and from code.** Hold `E` and press `+` / `-` (main row or numpad): the echo of the track you are on gets 25 ms longer / shorter, from 1 ms up to the delay line's 2730 ms (at 48 kHz). It works while the echo is off too (it starts with that time), and a running echo glides there in ~0.15 s instead of jumping. On the drumpad track it sets the pads' own echoes as well; on the fusion track it acts on the layers track, or on the drumpad while a numpad pad is held. `E` itself still plays (a note, or pad 11), as when holding a pad to change it. The status line shows `[echo 375ms]`, and while `E` is held the time it changes. Recordings keep it (`track 1 echo_ms 375`, `pad 1 A echo_ms 225`) and the replay plays it.
+**Echo time, live and from code.** Hold `E` and press `+` / `-` (main row or numpad): the echo of the track you are on gets 25 ms longer / shorter, from 1 ms up to the delay line's 2730 ms (at 48 kHz). It works while the echo is off too (it starts with that time), and a running echo glides there in ~0.15 s instead of jumping. On a drumpad track it sets the pads' own echoes as well. `E` itself still plays (a note, or pad 11), as when holding a pad to change it. The status line shows `[echo 375ms]`, and while `E` is held the time it changes. Recordings keep it (`track 1 echo_ms 375`, `pad 1 A echo_ms 225`) and the replay plays it.
 
 For a game, as whole milliseconds:
 
@@ -438,32 +455,140 @@ drumpad_pattern_play(&pads);
 drumpad_pattern_stop(&pads);
 ```
 
-On the fusion track, Shift+`+` opens the drumpad's pattern too (the numpad `*` is pad 13 there).
 
-### Fusion: keyboard and numpad together
+### Machines: mechanical sounds on a throttle
 
-The fusion track (track 5 with the default kit: piano, layers, drumpad, replay, fusion) plays two instruments at once: the **main keyboard plays the layered keyboard** (track 2: piano + strings + synth) and the **numpad plays the drumpad** (track 3). It has no sound of its own; it plays those tracks, so their volume, effects and settings apply, and a recording logs the notes and hits on tracks 2 and 3 (and the replay plays them back there).
+The machine track (track 4 with the default kit) plays one sound file as an endless loop over a part of the file, and a **throttle** from 0 (idle) to 1 (full) decides how it sounds. A petrol engine, a generator, a drill, a fan: one recording each.
 
 ```
- numpad:   7  8  9  -          pads  7  8  9  14
-           4  5  6  +                4  5  6  15
-           1  2  3  Enter            1  2  3  16
-           0     .                   10    11          /  = pad 12    *  = pad 13
+audiatron --machine engine.wav       the file to use (WAV / MP3); without it a built-in petrol engine plays
+audiatron --machine jet              a built-in sound with its settings: petrol, jet, propeller, rocket
+audiatron --machine my.atengine      a saved engine: its sound and whole setup (see Engine files below)
 ```
 
-| While you hold a numpad pad | Does |
+| Key (on the machine track) | Does |
 |---|---|
-| `+` / `-` (main keys) | pitch of that pad |
-| arrows, `,` / `.` | volume / pan of that pad |
-| `L`, `P`, `X` | loop, keep tempo, sync of that pad |
-| `C` / `V` / `F1` | crush / tremolo / echo on that pad |
-| `/` | the cut editor for that pad (digits from the numpad work) |
-| `Backspace` | reset that pad |
-| a letter | still a note on the layers (a letter never hits a drum here) |
+| `W` hold | throttle up; starts the machine if it is off |
+| `S` hold | throttle down |
+| `Q` | machine on / off |
+| `R` | throttle back to idle |
+| `X` | auto idle on / off: with no key held the throttle sinks back to idle (off: it stays where you leave it) |
+| `G` | gearbox: off → manual → automatic → off |
+| `A` / `D` | shift down / up |
+| `1` `2` `3` `4` | another engine sound, and only the sound: petrol engine, jet, propeller, rocket. Your curves, effects and gearbox stay |
+| `5` `6` `7` `8` | factory setup: that sound with the curves, effects and gearbox made for it |
+| `P` | save the engine (sound and setup) as `machines\machine_001.atengine`, the next number each time |
 
-With no pad held, every key except the numpad is the layered keyboard's (`1`–`3` layers on/off, `Y` / `X` octave), and the track keys `,` `.` `9` `0` `Enter` `C` `V` `F1` act on the layers track (track 2), not on the fusion track itself.
+Four **curves** turn the throttle into the sound. Each has a value at idle, a value at full throttle and a shape in between (`value = idle + (full - idle) * f(throttle)`):
 
-The numpad is told apart from the arrows, Enter and the main-row `-` by the console's "enhanced key" flag (`AT_KeyEvent.extended`): numpad 8 and the Up arrow have the same scan code. So it works with NumLock on or off. Checked with a test through the app's key handler: main A gave note 60 on the layers channel and no drum hit, numpad 1 / 2 gave pad notes 36 / 37 (numpad 2 also without a typed character, i.e. NumLock off), holding numpad 1 made the Up arrow and `+` / `-` / `C` / `,` change pad 1, while numpad 8 (Up's code) stayed a pad; with no pad held `,` / `V` / `Enter` changed the layers track; the cut editor took 250 / 750 typed on the numpad; a recording on the fusion track had `track 2 note 60 on` and `pad 1 A hit 1`.
+| Curve | Default (idle → full) | Means |
+|---|---|---|
+| gain | 0.35 → 1.0 | how loud |
+| from | 2.0 s → 2.0 s | where the looped part of the file starts |
+| to | 4.0 s → 3.0 s | where it ends: idle loops 2.0..4.0 s, full throttle 2.0..3.0 s |
+| rate | 1.0 → 1.0 | how fast the file is read (speed and pitch together; e.g. 1 → 1.9 makes an engine rev) |
+
+The machine also has **its own effects**, each off until switched on (`machine_set_fx`), and every one of their settings is a curve on the same throttle, so the sound changes as a whole when you open it up:
+
+| Effect | Curves (default idle → full) |
+|---|---|
+| EQ | low-pass 1800 → 14000 Hz (the muffler opens, ease in), low shelf 120 Hz +3 → +1 dB, bell 300 → 1500 Hz at 0 → +4 dB, high shelf 6 kHz −4 → +2 dB |
+| crush | downsample 1 → 6, bits 12 → 6 |
+| tremolo | rate 6 → 22 Hz, depth 0.5 → 0.15 (its own phase, so a changing rate never jumps) |
+| echo | time 140 → 70 ms, feedback 0.35 → 0.25, mix 0.25 → 0.15 (~1 MB, made the first time it is switched on) |
+
+They run in that order after the loop reader, follow the smoothed throttle every 32 frames, and keep running 3 s after the machine stops so the echo rings out. A recording has them as `track 6 machine fx_eq 1` and `track 6 machine eq_lowpass_full 9000`. Checked: with the low-pass on the throttle (300 Hz → 15 kHz) the share of energy above 1 kHz went from −50.8 dB at idle to −29.6 dB at full; all four effects on during a sweep stayed finite and below full scale; a take with the machine's EQ, tremolo and echo switched on, a changed curve and the throttle at 0.8 came back exactly on the replay's copy.
+
+**Built-in sounds** (`instruments/machine/machine_builtin.c`), synthesized when chosen, each even all the way through so any part loops cleanly, each with a preset (`machine_preset`) that makes it move:
+
+| Sound | What it is | Preset |
+|---|---|---|
+| petrol | four-cylinder car engine: exhaust pulses, muffler, valve train | rate 0.8 → 2.4 on the engine's rev, muffler (EQ) opens, automatic gearbox, pedal lifts when W is let go |
+| jet | turbofan: roar, rumble, fan whine at 3.15 kHz and harmonics, hiss | spools slowly (follow 900 ms), rate 0.75 → 1.45, low-pass 2.5 → 16 kHz, whine bell +4 dB |
+| propeller | 3-blade propeller at 2300 rpm: blade-pass pulses at 115 Hz, chopped air, a nine-cylinder radial's exhaust | rate 0.6 → 1.3, low-pass 1.8 → 9 kHz |
+| rocket | heavy low roar, mid roar, hiss, crackle of sparse sharp impulses, slow flutter | rate 0.85 → 1.1, low-pass 3.5 → 18 kHz, echo off the pad |
+
+**Gearbox** (`instruments/machine/machine_gearbox.c`). Off, the curves read the throttle. Manual or automatic, the throttle is a vehicle's gas pedal and the curves read the **engine speed** (rev: 0 at idle rpm, 1 at the rev limiter), which has momentum:
+
+- The free engine (neutral, clutch open) moves toward the pedal's rpm with `rev_up_s` / `rev_down_s`. In gear, rpm = speed × the gear's ratio; the pedal accelerates the vehicle (`power`, less in taller gears and near the limiter, none on it), `drag` and `engine_brake` slow it; pulling away, the clutch slips.
+- **A shift**, with the settings of the gear it goes into: clutch out (`clutch_out_ms`, the pedal lifted by `lift`), gear change (`shift_ms`, the engine runs free: it falls on an upshift and blips up to the new gear's rpm on a downshift), clutch in (`clutch_in_ms`): the rpm moves to the new gear's along that gear's **momentum curve**, a shape over the clutch-in time (ease out: quick, then settling). Every gear has its own ratio, shift points, times, lift and curve.
+- **Automatic**: up at the gear's `up_rpm` × the **shift-point curve** at the pedal (default 0.5 → 1, ease in: a light foot shifts early, full pedal at the limit), down below `down_rpm`, kickdown at full pedal, and, like a real automatic, an early upshift when you lift off. **Manual**: `A` / `D`, below 1st is neutral.
+- Defaults: a six-speed car, 900–6800 rpm, ratios 130 / 78 / 55 / 42 / 34 / 28 rpm per km/h, about 185 km/h flat out.
+
+The rev is sent to the sound like the throttle, so a recording has the engine as it sounded and the replay needs no gearbox. Checked by driving the gearbox through the real engine in 10 ms steps: full pedal goes 1 → 6 in order with no downshift (183 km/h in 6th after 60 s), the rpm stays between idle and the limiter, every upshift drops the revs, a shift takes exactly clutch out + shift + clutch in (0.45 s against 0.43 s set, in 10 ms ticks), while the clutch closes the rpm follows the momentum curve to within 0.001, a 30 % pedal shifts 1 → 2 at 3375 rpm instead of 6198, manual stays in 1st on the limiter until `D`, a slower clutch set on 3rd changes only shifts into 3rd, and lifting off at 150 km/h it coasts down to 14 km/h in 1st.
+
+**Engine files** (`instruments/machine/machine_file.c`, `.atengine`). An engine you set up is plain text, one setting a line, so you can keep a library of engines, edit one in a text editor and load it with `--machine my.atengine` (or in AudioStudio):
+
+```
+audiatron engine 1
+sound file C:\sounds\diesel.wav               or: sound builtin jet
+volume 1
+follow_ms 120
+rise 0.6
+curve rate 0.8 2.4 ease_in 1.5 0.25 0.5 0.75     name, idle, full, shape, amount, three custom points
+fx eq on
+gearbox gears 6
+gear 1 130 6200 0 70 140 220 0.85 0 1 ease_out 2 0.25 0.5 0.75
+gearbox mode automatic
+```
+
+`gear` lines are: number, ratio, up rpm, down rpm, clutch out / shift / clutch in ms, lift, then the momentum curve like any curve (idle, full, shape, amount, three points). Numbers are written in their shortest exact form, so a file loads back bit for bit. A sound file that is not where the line says is also looked for next to the `.atengine`, so a folder with an engine and its WAV can be moved as a whole. Lines a reader does not know are skipped. From code, the parts can be chosen, e.g. only the gearbox to put under another engine:
+
+```c
+machine_save_preset(&m, "v8.atengine", AT_MACHINE_SAVE_ALL, error, sizeof error);
+machine_load_preset(&m, "v8.atengine", AT_MACHINE_SAVE_GEARBOX, error, sizeof error);     // SOUND, CURVES, FX, MOTION, GEARBOX
+machine_write_settings(&m, f, AT_MACHINE_SAVE_SETUP);      // into a file of your own; machine_read_setting reads a line back
+machine_settings_snapshot(&m, AT_MACHINE_SAVE_SETUP, emit, user);   // the same lines, one call of emit each
+```
+
+Checked: a machine with a WAV of its own and every curve, effect, motion setting, the gearbox and all 8 gears changed came back from its file bit for bit in a fresh machine; loading only the gearbox, or the setup without the sound, left the rest untouched; a built-in jet with its preset came back as the jet; a hand-written file whose WAV had moved found it next to the file and skipped the lines it did not know; a file without the header, a missing sound and an unknown built-in were refused with a message.
+
+Shapes: `linear`, `ease in` (t^amount: slow, then fast), `ease out` (fast, then slow), `s-curve`, `custom` (three points of your own at 25 / 50 / 75 %). From code:
+
+```c
+machine_init(&m, sample_rate);                                    // built-in engine, the defaults above
+machine_load(&m, "diesel.wav", error, sizeof error);              // before or after attach (switches between two blocks)
+AT_MachineCurve rate = { 1.0f, 1.9f, AT_MACHINE_SHAPE_EASE_IN, 1.5f, { 0.25f, 0.5f, 0.75f } };
+machine_set_curve(&m, AT_MACHINE_CURVE_RATE, &rate);
+machine_set_running(&m, true);
+machine_set_throttle(&m, 0.7f);                                   // what W / S do, in small steps
+```
+
+How it sounds: the throttle is smoothed on the audio thread (`follow`, 120 ms), the loop's seam is crossfaded with equal power (40 ms), and when the throttle moves the loop's edges past the read position, the jump is crossfaded too (12 ms), so moving the throttle never clicks. Holding W / S moves the throttle at 0.6 / 0.9 per second (`rise_per_s`, `fall_per_s`); every step is sent with `engine_set_param`, so an input recording (F5) has the throttle as it moved (`track 6 machine throttle 0.45`) and the replay plays it on the machine's copy. Checked with a test that sweeps the throttle idle → full → idle over a 440 Hz tone for 16 s: the largest step between two samples was 0.058 of the peak, which is a 440 Hz sine's own slope at 48 kHz, so no seam and no moving edge clicked. Not judged by ear.
+
+### Sync: tracks on one clock
+
+The drumpad has always had a shared clock for its pads. The engine now has one for whole tracks (`engine/engine_sync.c`): every track switched to sync (`app_set_track_sync`, in AudioStudio the **SY** button on a track) is on it, so what those tracks play starts from the same place in time.
+
+- **Loops join in phase.** A loop that starts on a synced track (a drumpad loop, a song on a player, the machine's loop) asks the clock where it stands and starts there, as if it had started together with the clock: two loops of the same length are at the same position of their buffers, however late the second one was pressed. While nothing synced plays the clock is idle; the next synced loop starts it, from its top. Each source says whether it plays through `AT_SourceType.playing`.
+- **Notes and hits wait for the grid.** While the clock runs, notes sent to a synced track wait for its next grid step (`engine_set_sync_grid`; AudioStudio sets 1/16 at the song's tempo by default, 0 = they play at once). A note-off lands at least one step after its note-on, so a quick tap is one step long, never silent. Notes sent with `engine_at` (a sequencer, a replay) are on their frame already and are left alone.
+- **A replay** on a synced track starts on the clock's next bar.
+- **A transport** can pin the clock to its beat 0 (`engine_set_sync_origin(e, frame, true)`): then it runs while the song runs. AudioStudio does that, and when a synced loop is already running when Play is pressed, the song starts on one of the clock's bars, so the song and the loop stay together.
+
+Checked offline (scratchpad test, 48 kHz): with the grid at 6000 frames from frame 1000, a note sent at frame 6720 sounded at 7000 and a quick tap's note-off was put on 13000; with sync off the note sounded at once. A player loop started the clock; a drum loop of the same length started 11040 frames later played at exactly the player's position, block after block (10080 = 10080). A synced machine started at the clock's place in its loop (head 2.4800 s, computed 2.4800 s). With the track's sync off a drum loop started from its top. Input recordings (F5) keep the notes as they were played, before the grid: the replay plays them unquantized.
+
+Tracks: 12 at most now (24 engine channels: every track and its replay copy).
+
+### The audio track: sound files on a timeline
+
+`instruments/audio_track/` plays REGIONS of any number of WAV / MP3 files: a part of a file (its cut), for a given time, stretched, reversed, faded, with a gain and a pitch. Up to 16 overlap. It plays nothing by itself: a sequencer (AudioStudio's arrangement) sends `audio_track_play(track, &region, frame)` after `engine_at`, and the region starts on that exact frame; the region is copied into a voice when that command arrives, so the control thread never writes what the audio thread reads. The app adds the track only when asked (`options.audio_track`; AudioStudio does), since the console has no timeline. Its regions are not in input recordings; a WAV recording (F6) has them.
+
+```c
+AT_AudioRegion r = { .file = audio_track_load(&track, "loop.wav", err, sizeof err),
+                     .offset_s = 0.5, .length_s = 2.0, .rate = 0.5, .gain = 1.0f,
+                     .keep_pitch = true, .fade_out_s = 0.1f };     // 1 s of the file over 2 s, same pitch
+engine_at(&engine, start, tag);
+int slot = audio_track_play(&track, &r, start);
+engine_at(&engine, 0, 0);
+```
+
+- **Stretch**: `rate` = seconds of file per second of region. Like tape the pitch goes with the speed (read directly, cubic); with `keep_pitch` only the speed changes: grains of the file read at the pitch, placed at the speed, two sine² windows that add up to 1 (like the pitch shifter, but reading the file itself, so with no added delay). `pitch` shifts on top, the length stays.
+- **Start inside it**: `start_s` (a transport starting in the middle of a region goes on from there).
+- Every start and stop is faded over 3 ms on top of the region's own fades, so a cut in the middle of a sound does not click.
+
+Checked offline: a region sounded from its exact frame for its exact length (12000 frames of 0.25 s); a 440 Hz file stretched x2 like tape measured 880 Hz (+54 dB over 440), stretched x2 and x0.5 keeping the pitch stayed at 440 Hz (+33 / +35 dB), pitch +12 at the same length gave 880 Hz, all 24000 frames long as set; a rising ramp reversed fell; a region started half way in began at the ramp's middle; a stop faded out within 142 frames (3 ms).
+
+**A part of a recording** (`replay_play_part`): a replay can play its recording from a time on, faster or slower (event times scaled), from an exact frame until another. Settings recorded before that time are applied at its start, its notes from before are left out. AudioStudio puts input recordings (.txt) on the audio track's lane this way. Checked: a part from 1 s at x2 applied the volume set at 0.5 s at its start, left out the note at 0.5 s, played the note at 1.5 s 0.25 s after its start and stopped at its end frame without the note at 3 s.
 
 ### Recording and replay
 
@@ -511,13 +636,19 @@ pad 2 S file C:\AUDIATRON\sample\loop.mp3
 0.350000 track 3 sampler rate 1.05946314    ← pitched up a semitone (tape mode)
 0.350000 track 3 shifter ratio 1            ← (keep-tempo mode uses the shifter)
 1.550000 track 2 volume 0.9                 ← track volume, mute / solo / hold, crush / tremolo / echo
+1.600000 track 1 tremolo rate 4.5           ← a track effect's settings: tremolo rate / depth,
+1.600000 track 1 crush bits 7               ←   crush downsample / bits, echo feedback / mix / damping / ping_pong
+1.700000 track 2 layers 2 tremolo depth 0.3 ← inside a layer: its insert effect ...
+1.700000 track 2 layers 3 synth attack 0.01 ← ... and its synth
 ```
 
-These lines come from the engine itself: every note and every parameter change an instrument sends (to its synth, layer stack, sampler or pitch shifter) is seen there (`engine_set_observer`) and written with its track. So a new instrument built from these modules is recorded without any extra code. Drum lines: `pad N K tempo on/off`, `volume 0.8`, `pan -0.2`, `tremolo on/off`, `sync on/off`, `cut 0.2 0.9`, `loop on/off`, `reset`. The app's own changes: `track 3 select drumpad`, `master volume 0.9`, `all notes off`. Values are written with 9 digits, so the replay sets exactly the same numbers; times have 6 decimals, so every event goes back on its exact frame.
+Effects are recorded with all their settings: at the start of a take every effect instance a track has writes its settings (and `on` if it is switched on), a change while recording writes a line, and an effect switched on for the first time during the take writes the settings it starts with, so the replay's copy starts it the same way. (The echo's time is the `echo_ms` line.) Checked with a test that records tremolo, crush and echo changes, a layer's tremolo and a layer's synth, replays the take and compares the copies: every value came back exactly.
 
-**The replay track** (track 4) plays such a file back: `P` play from the start / stop, `L` loop the recording, **`Left` / `Right` (or `Up` / `Down`) the previous / next recording** in the same folder (all `.txt` files, in name order, wrapping around; the status line shows `rec_002.txt 2/5`). Switching while it plays goes straight on with the new one; a new `F5` recording appears in the list at once. When an input recording stops it is loaded there automatically; `--replay FILE` loads one at start (and selects the track).
+These lines come from the engine itself: every note and every parameter change an instrument sends (to its synth, layer stack, sampler or pitch shifter) is seen there (`engine_set_observer`) and written with its track. So a new instrument built from these modules is recorded without any extra code. Drum lines carry their drum track (there may be several): `track 4 pad 2 S hit 0.9`, `track 4 pad 1 A tempo on/off`, `volume 0.8`, `pan -0.2`, `tremolo on/off`, `sync on/off`, `cut 0.2 0.9`, `loop on/off`, `reset`. (Recordings from before name no track, `pad 2 S hit`: they play on the first drum track.) The app's own changes: `track 3 select drumpad`, `master volume 0.9`, `all notes off`. Values are written with 9 digits, so the replay sets exactly the same numbers; times have 6 decimals, so every event goes back on its exact frame.
 
-It plays **everything on copies of the tracks**: every melodic track (piano, layers, players, sampler keyboards) has a copy on the engine channel 8 above its own (players share the decoded file with their copy), and the drums play on the replay's own drumpad, on the replay track's channel. So your live tracks stay free: play over your own take, on the same instruments, and record that as the next take. A copy gets the recorded track's volume, pan, mute / solo, hold and effects too.
+**Playing a recording back.** `F8` plays the last take (it is loaded when `F5` stops) and stops it again; `--replay FILE` plays a recording from the start. There is no replay track any more: in AudioStudio recordings are regions on an audio track, cut and stretched like sound files (`replay_play_part`), and a take recorded there lands on an audio track by itself.
+
+It plays **everything on copies of the tracks**: every track (piano, layers, players, sampler keyboards, drumpads, machines) has a copy on the engine channel 16 above its own (copies share the decoded files with their track, a drumpad's copy plays the same pad files), so a recording's drums play on the copy of the drum track they were played on. So your live tracks stay free: play over your own take, on the same instruments, and record that as the next take. A copy gets the recorded track's volume, pan, mute / solo, hold and effects too.
 
 - `key`, `track N select` and `master` lines are there to read; everything else is played.
 - The recording's tracks are matched to this program's by kind and file, not only by number: with the tracks in another order the parts still find their instrument; a part with no matching track (a song that is not loaded) is reported and skipped.
@@ -527,9 +658,9 @@ It plays **everything on copies of the tracks**: every melodic track (piano, lay
 
 **How the timing works.** The replay sends every line 250 ms before it is due, from the control thread, with its exact engine frame (`engine_at`); the engine keeps such commands waiting and splits the audio block at their frame. LFOs that run on the engine clock (the strings layer's tremolo, a track's tremolo) run on a copy as they did in the take: the recording stores its start frame (`clock`) and the copy's channel clock is shifted by that much (`engine_set_channel_clock`).
 
-**Checked** with a test program that drives the app's own key handling, one take on every kind of track: a song started and pitched up on a player track, a drum hit and a drum loop, two piano notes with a waveform change between them, the layered keyboard with a layer switched off, its track volume raised and a three-note chord, the drum loop stopped. Recorded with `F7`, loaded into the replay track by itself, played back on the copies while `F6` recorded it: the replay's WAV equals the take's WAV to within 1 of 32768 over the whole take (before the channel clock shift, the strings tremolo made it 7). Earlier drum-only take: also within 1. A hand-written file with events at 0.500250 s and 1.000500 s (off the audio block grid) started its sounds on frames 24012 and 48024 exactly, and its `pitch +12` gave 880 Hz.
+**Checked** with a test program that drives the app's own key handling, one take on every kind of track: a song started and pitched up on a player track, a drum hit and a drum loop, two piano notes with a waveform change between them, the layered keyboard with a layer switched off, its track volume raised and a three-note chord, the drum loop stopped. Recorded with `F7`, loaded into the replay by itself, played back on the copies while `F6` recorded it: the replay's WAV equals the take's WAV to within 1 of 32768 over the whole take (before the channel clock shift, the strings tremolo made it 7). Earlier drum-only take: also within 1. A hand-written file with events at 0.500250 s and 1.000500 s (off the audio block grid) started its sounds on frames 24012 and 48024 exactly, and its `pitch +12` gave 880 Hz.
 
-**Limits.** A logged time is when the key arrived, so it can be up to one device period earlier than the sound changed (10 ms in WASAPI shared mode, 3 ms exclusive, the WinMM period on WinMM); the replay plays it exactly at the logged time. Notes held down when the recording starts are not in it; a song already playing is (from its position), drum loops already running restart from their beginning. The master volume and master EQ are logged but not replayed (they belong to everything that plays now). The replay's drums use the replay track's channel, so the recorded drum track's volume and effects are applied there. If the control thread stalls longer than 250 ms (a window being dragged), lines arrive late and play at once. Not tried live in the console; the test drives the same key handler.
+**Limits.** A logged time is when the key arrived, so it can be up to one device period earlier than the sound changed (10 ms in WASAPI shared mode, 3 ms exclusive, the WinMM period on WinMM); the replay plays it exactly at the logged time. Notes held down when the recording starts are not in it; a song already playing is (from its position), drum loops already running restart from their beginning. The master volume and master EQ are logged but not replayed (they belong to everything that plays now). A recording's track is found by its kind (and a player's file) and order: the first piano of the recording plays on the first piano here, and so on. If the control thread stalls longer than 250 ms (a window being dragged), lines arrive late and play at once. Not tried live in the console; the test drives the same key handler.
 
 ### Two backends, one engine
 
@@ -726,7 +857,7 @@ Everything called from `engine_render`, i.e. every effect `_process`, every sour
 - [x] Drumpad: 16 pads, one file each, per-pad pitch / loop / volume / pan / pitch mode; key ranges per layer
 - [x] Per-track and per-pad effects, shared clock (synced / free pads), part of a file (cut)
 - [x] Recording: input as text (F5), WAV (F6), both (F7), every track; replay on copies of the tracks, sample-accurate
-- [x] `engine/`: sample-accurate timed commands (`engine_at`, `engine_cancel`), observer, per-channel clock; 16 channels (8 tracks + 8 copies)
+- [x] `engine/`: sample-accurate timed commands (`engine_at`, `engine_cancel`), observer, per-channel clock; 24 channels (12 tracks + 12 copies); a sync clock for the tracks switched to sync
 
 **Next** (each is one new folder)
 - [ ] `dsp/lfo/`, `dsp/svf/`: LFO and state-variable filter as building blocks

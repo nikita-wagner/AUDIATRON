@@ -7,6 +7,7 @@ void replay_init(AT_Replay* r, float sample_rate, AT_ReplayHost host) {
     memset(r, 0, sizeof *r);
     r->sample_rate = sample_rate;
     r->host        = host;
+    r->rate        = 1.0;
 }
 
 void replay_unload(AT_Replay* r) {
@@ -106,11 +107,50 @@ void replay_play(AT_Replay* r) {
     if (r->playing) r->host.end(r->host.user, 0);         // a restart: silence what still waits
 
     r->start    = now(r) + (uint64_t)(r->sample_rate * AT_REPLAY_START_MS / 1000.0f);
+    if (r->engine && engine_channel_sync_sent(r->engine, r->channel))
+        r->start = engine_sync_next_bar(r->engine, r->start);   // synced: on the clock's next bar
     r->next     = r->first_timed;
     r->end_sent = false;
     r->playing  = true;
+    r->from_s   = 0.0;
+    r->rate     = 1.0;
+    r->until    = 0;
     r->host.begin(r->host.user, r->start);
     replay_pump(r);
+}
+
+void replay_play_part(AT_Replay* r, uint64_t at, double from_s, double rate, uint64_t until) {
+    if (!r->loaded) return;
+    if (r->playing && !r->end_sent) {
+        if (r->until && r->until <= at) r->host.end(r->host.user, r->until);   // the pass before ends where it should
+        else                            r->host.end(r->host.user, 0);          // it overlaps: it stops now
+    }
+    r->start    = at;
+    r->from_s   = from_s > 0.0 ? from_s : 0.0;
+    r->rate     = rate < 0.05 ? 0.05 : rate > 20.0 ? 20.0 : rate;
+    r->until    = until;
+    r->next     = r->first_timed;
+    r->end_sent = false;
+    r->playing  = true;
+    r->loop     = false;
+    r->host.begin(r->host.user, r->start);
+    replay_pump(r);
+}
+
+// A line that makes something sound rather than sets something: left out
+// when a part starts after it.
+static bool is_event(const char* text) {
+    static const char* const words[] = { " note ", " hit", " loop start", " sampler play", " sampler seek", "all notes off" };
+    for (size_t i = 0; i < sizeof words / sizeof *words; i++)
+        if (strstr(text, words[i])) return true;
+    return false;
+}
+
+// The engine frame of a recording time in the pass being sent.
+static uint64_t frame_of(const AT_Replay* r, double seconds) {
+    const double rate = r->rate > 0.0 ? r->rate : 1.0;
+    const double s    = seconds > r->from_s ? (seconds - r->from_s) / rate : 0.0;
+    return r->start + to_frames(r, s);
 }
 
 void replay_stop(AT_Replay* r) {
@@ -133,14 +173,17 @@ void replay_pump(AT_Replay* r) {
         // every line due before the horizon, with its exact frame
         while (r->next < r->file.count) {
             const AT_LogLine* line = &r->file.lines[r->next];
-            uint64_t          at   = r->start + to_frames(r, line->seconds);
+            uint64_t          at   = frame_of(r, line->seconds);
+            if (r->until && at >= r->until) { r->next = r->file.count; break; }   // the part ends here
             if (at > horizon) return;
-            if (strcmp(line->text, "end")) r->host.apply(r->host.user, at, line->text);
+            const bool before = line->seconds < r->from_s;
+            if (strcmp(line->text, "end") && !(before && is_event(line->text))) r->host.apply(r->host.user, at, line->text);
             r->next++;
         }
 
         // all lines of this pass are out: the end
-        uint64_t end = r->start + r->length;
+        uint64_t end = frame_of(r, (double)r->length / r->sample_rate);
+        if (r->until && r->until < end) end = r->until;
         if (r->loop && r->length > 0) {
             if (end > horizon) return;
             r->start = end;                                 // the next pass follows seamlessly
@@ -160,58 +203,5 @@ void replay_pump(AT_Replay* r) {
 double replay_position_seconds(const AT_Replay* r) {
     if (!r->playing) return 0.0;
     uint64_t time = now(r);
-    return time > r->start ? (double)(time - r->start) / r->sample_rate : 0.0;
-}
-
-// ─── AT_Instrument adapter ───────────────────────────────────────────────────
-
-static void replay_attach(void* self, AT_Engine* engine, uint32_t channel) {
-    AT_Replay* r = (AT_Replay*)self;
-    r->engine  = engine;
-    r->channel = channel;
-    // The host plays the recording's drums on this channel: the drumpad's EQ.
-    engine_set_eq_band(engine, (int)channel, 0, AT_FILTER_HIGHPASS, 25.0f, 0.707f, 0.0f);
-}
-
-static bool replay_key_adapter(void* self, const AT_KeyEvent* ev) {
-    return replay_key((AT_Replay*)self, ev);
-}
-
-static void replay_release_all(void* self) {
-    (void)self;                 // nothing is held: a replay keeps playing when another track is selected
-}
-
-static void replay_demo_start(void* self) {
-    replay_play((AT_Replay*)self);
-}
-
-static void format_time(char* out, size_t cap, double seconds) {
-    int s = (int)(seconds + 0.5);
-    snprintf(out, cap, "%d:%02d", s / 60, s % 60);
-}
-
-// e.g. "rec_001.txt 0:12/0:45 play loop"
-static void replay_status(void* self, char* out, size_t cap) {
-    const AT_Replay* r = (const AT_Replay*)self;
-    if (!r->loaded) { snprintf(out, cap, "empty (F5 / F7 records; Left / Right picks a recording)"); return; }
-
-    char here[16], total[16], which[16] = "";
-    format_time(here,  sizeof here,  replay_position_seconds(r));
-    format_time(total, sizeof total, (double)r->length / r->sample_rate);
-    if (r->list_index >= 0) snprintf(which, sizeof which, "%d/%d ", r->list_index + 1, r->list_count);
-    snprintf(out, cap, "%.20s %s%s/%s %s%s", r->label, which, here, total,
-             r->playing ? "play" : "stop", r->loop ? " loop" : "");
-}
-
-AT_Instrument replay_instrument(AT_Replay* r) {
-    return (AT_Instrument){
-        .name        = "replay",
-        .help        = REPLAY_HELP,
-        .self        = r,
-        .attach      = replay_attach,
-        .key         = replay_key_adapter,
-        .release_all = replay_release_all,
-        .status      = replay_status,
-        .demo_start  = replay_demo_start
-    };
+    return r->from_s + (time > r->start ? (double)(time - r->start) / r->sample_rate * r->rate : 0.0);
 }
