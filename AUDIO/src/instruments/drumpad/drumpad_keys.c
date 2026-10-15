@@ -21,19 +21,32 @@
 #define VOLUME_STEP   0.1f
 #define PAN_STEP      0.1f
 
-// Pads 1..8 on the home row, 9..16 on the row above.
-static const uint16_t k_pad_keys[AT_DRUMPAD_PADS] = {
+// Pads 1..8 on the home row, 9..16 on the row above: the default. Every
+// drumpad plays the same keys; drumpad_set_pad_keys changes them.
+static const uint16_t k_default_keys[AT_DRUMPAD_PADS] = {
+    AT_SC_A, AT_SC_S, AT_SC_D, AT_SC_F, AT_SC_G, AT_SC_H, AT_SC_J, AT_SC_K,
+    AT_SC_Q, AT_SC_W, AT_SC_E, AT_SC_R, AT_SC_T, AT_SC_Y, AT_SC_U, AT_SC_I
+};
+static uint16_t s_pad_keys[AT_DRUMPAD_PADS] = {
     AT_SC_A, AT_SC_S, AT_SC_D, AT_SC_F, AT_SC_G, AT_SC_H, AT_SC_J, AT_SC_K,
     AT_SC_Q, AT_SC_W, AT_SC_E, AT_SC_R, AT_SC_T, AT_SC_Y, AT_SC_U, AT_SC_I
 };
 
+void drumpad_default_pad_keys(uint16_t keys[AT_DRUMPAD_PADS]) {
+    for (int i = 0; i < AT_DRUMPAD_PADS; i++) keys[i] = k_default_keys[i];
+}
+
+void drumpad_set_pad_keys(const uint16_t keys[AT_DRUMPAD_PADS]) {
+    for (int i = 0; i < AT_DRUMPAD_PADS; i++) s_pad_keys[i] = keys ? keys[i] : k_default_keys[i];
+}
+
 uint16_t drumpad_pad_key(int pad) {
-    return pad >= 0 && pad < AT_DRUMPAD_PADS ? k_pad_keys[pad] : 0;
+    return pad >= 0 && pad < AT_DRUMPAD_PADS ? s_pad_keys[pad] : 0;
 }
 
 static int find_pad(uint16_t scan) {
-    for (int i = 0; i < AT_DRUMPAD_PADS; i++)
-        if (k_pad_keys[i] == scan) return i;
+    for (int i = 0; scan && i < AT_DRUMPAD_PADS; i++)
+        if (s_pad_keys[i] == scan) return i;
     return -1;
 }
 
@@ -138,7 +151,7 @@ static bool control_of(uint16_t scan, Change* change, float* step, bool* repeats
 // ─── Entry points ────────────────────────────────────────────────────────────
 
 bool drumpad_key(AT_Drumpad* d, const AT_KeyEvent* ev) {
-    int pad = find_pad(ev->scan_code);
+    int pad = ev->extended ? -1 : find_pad(ev->scan_code);     // arrows share codes with the numpad: never pads
 
     // the "/" and "*" editors take every key while they are open
     if (d->pat_stage >= 0) return drumpad_pattern_edit_key(d, ev);
@@ -192,8 +205,8 @@ static void append(AT_Drumpad* d, size_t* used, const char* fmt, ...) {
 
 static void append_key_row(AT_Drumpad* d, size_t* used, int first, int count) {
     for (int i = first; i < first + count; i++) {
-        char key[16];
-        key_name(k_pad_keys[i], key, sizeof key);
+        char key[16] = "-";                                  // a pad without a key
+        if (s_pad_keys[i]) key_name(s_pad_keys[i], key, sizeof key);
         append(d, used, "%s ", key);
     }
 }
@@ -212,7 +225,7 @@ void drumpad_build_help(AT_Drumpad* d) {
     for (int i = 0; i < AT_DRUMPAD_PADS; i++) {
         if (!d->pads[i].loaded) continue;
         char key[16];
-        key_name(k_pad_keys[i], key, sizeof key);
+        key_name(s_pad_keys[i], key, sizeof key);
         append(d, &used, "%s%s = %-16.16s", shown % 4 == 0 ? "    " : "  ", key, d->pads[i].label);
         if (++shown % 4 == 0) append(d, &used, "\n");
     }

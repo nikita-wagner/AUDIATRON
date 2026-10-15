@@ -8,33 +8,58 @@ void piano_keys_init(AT_PianoKeys* k, int octave) {
     for (int i = 0; i < AT_SC_COUNT; i++) k->held[i] = -1;
 }
 
+// ─── The layout ──────────────────────────────────────────────────────────────
+
+static AT_PianoLayout s_layout;
+static bool           s_layout_set;
+
+void piano_keys_default_layout(AT_PianoLayout* out) {
+    static const uint16_t notes[17] = {
+        AT_SC_A,    // C
+        AT_SC_W,    // C#
+        AT_SC_S,    // D
+        AT_SC_E,    // D#
+        AT_SC_D,    // E
+        AT_SC_F,    // F
+        AT_SC_T,    // F#
+        AT_SC_G,    // G
+        AT_SC_Y,    // G#  (German: Z)
+        AT_SC_H,    // A
+        AT_SC_U,    // A#
+        AT_SC_J,    // B   (German: H)
+        AT_SC_K,    // C
+        AT_SC_O,    // C#
+        AT_SC_L,    // D
+        AT_SC_P,    // D#
+        AT_SC_SEMICOLON   // E (German: Oe)
+    };
+    for (int i = 0; i < AT_PIANO_KEYS_NOTES; i++) out->note[i] = i < 17 ? notes[i] : 0;
+    out->octave_down = AT_SC_Z;     // German: Y
+    out->octave_up   = AT_SC_X;
+}
+
+const AT_PianoLayout* piano_keys_layout(void) {
+    if (!s_layout_set) { piano_keys_default_layout(&s_layout); s_layout_set = true; }
+    return &s_layout;
+}
+
+void piano_keys_set_layout(const AT_PianoLayout* layout) {
+    if (layout) s_layout = *layout;
+    else        piano_keys_default_layout(&s_layout);
+    s_layout_set = true;
+}
+
 // Physical key → semitones above the C of the current octave, -1 = not a note key.
 static int key_to_semitone(uint16_t scan) {
-    switch (scan) {
-    case AT_SC_A:         return 0;     // C
-    case AT_SC_W:         return 1;     // C#
-    case AT_SC_S:         return 2;     // D
-    case AT_SC_E:         return 3;     // D#
-    case AT_SC_D:         return 4;     // E
-    case AT_SC_F:         return 5;     // F
-    case AT_SC_T:         return 6;     // F#
-    case AT_SC_G:         return 7;     // G
-    case AT_SC_Y:         return 8;     // G#
-    case AT_SC_H:         return 9;     // A
-    case AT_SC_U:         return 10;    // A#
-    case AT_SC_J:         return 11;    // B (German: H)
-    case AT_SC_K:         return 12;    // C
-    case AT_SC_O:         return 13;    // C#
-    case AT_SC_L:         return 14;    // D
-    case AT_SC_P:         return 15;    // D#
-    case AT_SC_SEMICOLON: return 16;    // E
-    default:              return -1;
-    }
+    const AT_PianoLayout* l = piano_keys_layout();
+    for (int i = 0; scan && i < AT_PIANO_KEYS_NOTES; i++)
+        if (l->note[i] == scan) return i;
+    return -1;
 }
 
 AT_PianoKeysResult piano_keys_event(AT_PianoKeys* k, const AT_KeyEvent* ev, int* note) {
     uint16_t scan = ev->scan_code;
-    if (scan >= AT_SC_COUNT) return AT_PIANO_KEYS_NOT_MINE;
+    if (scan >= AT_SC_COUNT || ev->extended) return AT_PIANO_KEYS_NOT_MINE;
 
     int semitone = key_to_semitone(scan);
     if (semitone >= 0) {
@@ -53,10 +78,11 @@ AT_PianoKeysResult piano_keys_event(AT_PianoKeys* k, const AT_KeyEvent* ev, int*
         return AT_PIANO_KEYS_USED;
     }
 
-    if (scan == AT_SC_Z || scan == AT_SC_X) {       // octave down / up
+    const AT_PianoLayout* l = piano_keys_layout();
+    if (scan && (scan == l->octave_down || scan == l->octave_up)) {     // octave down / up
         if (ev->down && !ev->repeat) {
-            if (scan == AT_SC_Z && k->octave > OCTAVE_MIN) k->octave--;
-            if (scan == AT_SC_X && k->octave < OCTAVE_MAX) k->octave++;
+            if (scan == l->octave_down && k->octave > OCTAVE_MIN) k->octave--;
+            if (scan == l->octave_up && k->octave < OCTAVE_MAX) k->octave++;
         }
         return AT_PIANO_KEYS_USED;
     }

@@ -96,6 +96,7 @@ static const char* on_off(float v) { return v != 0.0f ? "on" : "off"; }
 void drumpad_event_format(const AT_PadEvent* ev, char* out, size_t cap) {
     char key[16];
     key_name(drumpad_pad_key(ev->pad), key, sizeof key);
+    if (!drumpad_pad_key(ev->pad) || !key[0]) snprintf(key, sizeof key, "-");     // a pad without a key
     for (char* c = key; *c; c++) if (*c == ' ') *c = '_';          // one word
 
     char what[64];

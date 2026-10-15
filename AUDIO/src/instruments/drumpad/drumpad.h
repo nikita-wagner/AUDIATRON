@@ -401,5 +401,9 @@ bool drumpad_key        (AT_Drumpad* d, const AT_KeyEvent* ev);         // drump
 bool drumpad_cut_edit_start(AT_Drumpad* d);                             // drumpad_cut_edit.c: false = no pad held
 bool drumpad_cut_edit_key  (AT_Drumpad* d, int pad_of_key, const AT_KeyEvent* ev);   // while d->edit_pad >= 0
 void drumpad_release_all(AT_Drumpad* d);                                // drumpad_keys.c
-uint16_t drumpad_pad_key(int pad);                                      // drumpad_keys.c: scan code of a pad
+uint16_t drumpad_pad_key(int pad);                                      // drumpad_keys.c: scan code of a pad, 0 = none
+// The keys of the pads, the same for every drumpad (scan codes, 0 = no key; not "extended" keys):
+// pads 1..8 on A S D F G H J K and 9..16 on Q W E R T Z U I by default (QWERTZ labels).
+void     drumpad_default_pad_keys(uint16_t keys[AT_DRUMPAD_PADS]);
+void     drumpad_set_pad_keys    (const uint16_t keys[AT_DRUMPAD_PADS]);   // control thread; NULL = the default
 void drumpad_build_help (AT_Drumpad* d);                                // drumpad_keys.c

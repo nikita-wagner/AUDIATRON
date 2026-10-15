@@ -9,6 +9,10 @@
 //
 //      Y / X   octave down / up
 //
+//  That is the default LAYOUT. Any key can play any note: piano_keys_set_layout
+//  takes a key per note (up to two octaves) and the two octave keys, for every
+//  instrument played like a piano at once.
+//
 //  Pure input logic, shared by every instrument that is played like a piano.
 //  It turns key events into "start note N" / "stop note N" and remembers which
 //  key started which note. It does not know the engine: the instrument that
@@ -29,6 +33,20 @@
 
 // First help line of every instrument that uses this layout.
 #define PIANO_KEYS_HELP "  A W S E D F T G Z H U J K O L P Oe   play notes (QWERTZ labels)\n"
+
+#define AT_PIANO_KEYS_NOTES 24          // note keys a layout can have: two octaves from C
+
+// Which key plays which note: scan codes (key_event.h), 0 = no key. Keys of
+// the main keyboard and the numpad; "extended" keys (arrows, ...) are not used.
+typedef struct {
+    uint16_t note[AT_PIANO_KEYS_NOTES];     // the keys for C, C#, D, ... of the octave and the next
+    uint16_t octave_down;
+    uint16_t octave_up;
+} AT_PianoLayout;
+
+void                  piano_keys_default_layout(AT_PianoLayout* out);   // the one drawn above
+const AT_PianoLayout* piano_keys_layout(void);
+void                  piano_keys_set_layout(const AT_PianoLayout* layout);   // control thread; NULL = the default
 
 typedef enum {
     AT_PIANO_KEYS_NOT_MINE,     // not a piano key
