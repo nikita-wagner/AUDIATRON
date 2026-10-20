@@ -108,8 +108,10 @@
 #include "layers/layer_stack.h"
 #include "sampler/sampler.h"
 
-#define AT_DRUMPAD_PADS         16
-#define AT_DRUMPAD_FIRST_NOTE   36          // note of pad 0 (General MIDI: bass drum)
+#define AT_DRUMPAD_PADS         256         // up to a 16 x 16 grid; pads without a file cost no layer
+#define AT_DRUMPAD_FIRST_NOTE   36          // note of pad 0 (General MIDI: bass drum); pad 92 and up play
+                                            // notes above 127: the engine's own, past MIDI's range
+#define AT_DRUMPAD_KEYED_PADS   16          // pads with a default key (drumpad_default_pad_keys) and in the help
 #define AT_DRUMPAD_PITCH_MIN    (-24.0f)    // semitones
 #define AT_DRUMPAD_PITCH_MAX    ( 24.0f)
 #define AT_DRUMPAD_VOLUME_MAX   2.0f
@@ -287,6 +289,8 @@ AT_Instrument drumpad_instrument(AT_Drumpad* d);
 void drumpad_hit           (AT_Drumpad* d, int pad, float velocity);    // one-shot
 void drumpad_loop_start    (AT_Drumpad* d, int pad);                    // also turns loop on
 void drumpad_loop_stop     (AT_Drumpad* d, int pad);                    // now, with a short fade
+void drumpad_loop_restart  (AT_Drumpad* d, int pad);                    // a running loop starts over with a transport
+                                                                        // (engine_at: on its frame); reports nothing
 bool drumpad_is_looping    (const AT_Drumpad* d, int pad);              // approximate (one block late)
 
 void drumpad_set_pitch     (AT_Drumpad* d, int pad, float semitones);

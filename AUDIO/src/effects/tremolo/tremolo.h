@@ -18,13 +18,17 @@
 #include "core/at_buffer.h"
 
 typedef struct {
-    float rate_hz;
-    float depth;                    // 0 = no effect, 1 = dips to silence
+    float    rate_hz;
+    float    depth;                 // 0 = no effect, 1 = dips to silence
+    uint64_t origin;                // the frame its wobble counts from (0 = the engine's first frame)
+    int      restart;               // AT_TREMOLO_PARAM_RESTART: the next block's first frame becomes the origin
 } AT_Tremolo;
 
 typedef enum {
     AT_TREMOLO_PARAM_RATE,          // Hz
-    AT_TREMOLO_PARAM_DEPTH          // 0..1
+    AT_TREMOLO_PARAM_DEPTH,         // 0..1
+    AT_TREMOLO_PARAM_RESTART        // any value: the wobble starts over from its top where the command lands
+                                    // (sent with engine_at: on that frame, e.g. where a song starts)
 } AT_TremoloParam;
 
 void tremolo_init     (AT_Tremolo* t, float rate_hz, float depth);

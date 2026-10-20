@@ -10,6 +10,13 @@ void engine_init(AT_Engine* e, float sample_rate) {
     for (int c = 0; c < AT_ENGINE_CHANNELS; c++) {
         eq_init(&e->channel[c].eq, sample_rate);
         channel_strip_init(&e->channel[c].strip, sample_rate);
+        e->channel[c].bus = -1;                     // straight to the master bus
+    }
+    for (int b = 0; b < AT_ENGINE_BUSES; b++) {
+        eq_init(&e->bus[b].eq, sample_rate);
+        e->bus[b].volume = 1.0f;
+        e->bus[b].gain = 1.0f;
+        peak_meter_init(&e->bus[b].meter);
     }
 
     eq_init(&e->master_eq, sample_rate);

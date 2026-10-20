@@ -109,6 +109,18 @@ bool engine_set_master_volume(AT_Engine* e, float volume) {
     return push(e, (AT_Command){ .type = AT_CMD_SET_MASTER_VOLUME, .f = { volume } });
 }
 
+bool engine_set_channel_bus(AT_Engine* e, uint32_t channel, int bus) {
+    return push(e, (AT_Command){ .type = AT_CMD_SET_CH_BUS, .i = { (int)channel, bus } });
+}
+
+bool engine_set_bus_volume(AT_Engine* e, uint32_t bus, float volume) {
+    return push(e, (AT_Command){ .type = AT_CMD_SET_BUS_VOLUME, .i = { (int)bus }, .f = { volume } });
+}
+
+bool engine_set_bus_mute(AT_Engine* e, uint32_t bus, bool mute) {
+    return push(e, (AT_Command){ .type = AT_CMD_SET_BUS_MUTE, .i = { (int)bus, mute } });
+}
+
 bool engine_set_limiter(AT_Engine* e, bool enabled) {
     return push(e, (AT_Command){ .type = AT_CMD_SET_LIMITER, .i = { enabled } });
 }
@@ -129,6 +141,10 @@ bool engine_set_eq_bypass(AT_Engine* e, int channel, bool bypass) {
 
 float engine_master_peak(const AT_Engine* e, uint32_t channel) {
     return peak_meter_read(&e->master_meter, channel);
+}
+
+float engine_bus_peak(const AT_Engine* e, uint32_t bus, uint32_t channel) {
+    return bus < AT_ENGINE_BUSES ? peak_meter_read(&e->bus[bus].meter, channel) : 0.0f;
 }
 
 float engine_channel_peak(const AT_Engine* e, uint32_t channel) {

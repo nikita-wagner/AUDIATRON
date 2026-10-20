@@ -34,7 +34,7 @@ static void layered_status(void* self, char* out, size_t cap) {
     int  used = snprintf(out, cap, "oct %d ", k->keys.octave);
     bool any  = false;
     for (uint32_t i = 0; i < k->layer_count; i++) {
-        if (!k->layer_on[i]) continue;
+        if (!k->layer_on[i] || !k->layer_name[i]) continue;
         if (used < 0 || (size_t)used >= cap) return;        // full
         used += snprintf(out + used, cap - (size_t)used, "%s%s", any ? "+" : "", k->layer_name[i]);
         any = true;

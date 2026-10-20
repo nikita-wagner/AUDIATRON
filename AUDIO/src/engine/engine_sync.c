@@ -79,7 +79,7 @@ bool engine_sync_hold_back(AT_Engine* e, AT_Command* c) {
     if (c->frame != 0 || (c->type != AT_CMD_NOTE_ON && c->type != AT_CMD_NOTE_OFF)) return false;
     AT_EngineSync* s    = &e->sync;
     const int      ch   = c->i[0];
-    const int      note = c->i[1] & 127;
+    const int      note = c->i[1] & (AT_ENGINE_NOTES - 1);
     if (ch < 0 || ch >= AT_ENGINE_CHANNELS || !s->on[ch] || s->step <= 0.0 || !running(e)) return false;
 
     const uint64_t now = e->frame_clock;

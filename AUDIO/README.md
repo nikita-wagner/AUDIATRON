@@ -202,6 +202,18 @@ The engine does not know the synth, any instrument, layers, tracks, the threads,
         4 chained slots per point.
 ```
 
+### Buses: groups of channels
+
+A channel can be summed into one of 8 **buses** instead of straight into the master bus (`engine_set_channel_bus(e, channel, bus)`, `-1` = the master bus, the default). A bus is a group of channels with its own EQ (`engine_set_eq_band(e, AT_EQ_BUS(bus), ...)`), its own hook point for effects (`AT_HOOK_BUS`, `channel` = the bus), a fader and a mute (`engine_set_bus_volume`, `engine_set_bus_mute`) and a meter (`engine_bus_peak`); the buses then go into the master bus, which keeps the master fader and the limiter:
+
+```
+  channel ─ … ─▶ fader + pan ─▶ bus Σ ─▶ bus EQ ─[H] BUS─▶ bus fader / mute ─▶ meter ─┐
+                                                                                     ▼
+                                                                            master bus Σ ─ …
+```
+
+Only buses that have channels are rendered. A fader or mute change glides over 64 frames (1.3 ms at 48 kHz), so it does not click and still lands where it is timed with `engine_at`. The console uses no buses; AudioStudio makes every master track a bus: the tracks above a master track (up to the next one up) are on its bus, with its EQ, its crush / tremolo / echo and its fader, and EQ clips and effect lines on its lane change them along the song. Checked with a test program: a 1 kHz sine on a bus at volume 0.5 came out at half its level, muted silent, through a 200 Hz lowpass on the bus EQ at under a tenth, through an x2 effect on the bus hook at twice; two channels on two buses were muted one at a time; a mute sent with `engine_at` for frame 2400 had the sound there before it and silence 64 frames after it; a channel back on no bus played as before.
+
 ### Tracks and layers
 
 Two different ways of having several sounds:

@@ -68,6 +68,32 @@ static void loop_start_command(void* self, int param, float value) {
     sampler_play_elapsed(s, elapsed);                       // a running loop of this pad fades out
 }
 
+// A running loop starts over where the command lands (a transport starting or looping back): on a synced
+// track where the engine's sync clock says (pinned to the song, it is where the song is since its beat 0);
+// otherwise from its top, and the drumpad's own clock starts over there too, so every pad restarted on the
+// same frame is in phase. A loop stopped meanwhile stays stopped.
+static void loop_restart_command(void* self, int param, float value) {
+    AT_Drumpad* d = (AT_Drumpad*)self;
+    AT_DrumPad* p = &d->pads[param];
+    AT_Sampler* s = &p->sampler;
+    (void)value;
+    if (!s->playing) return;
+
+    const uint64_t now     = d->clock.next;
+    double         elapsed = 0.0;
+    p->own_origin = now;
+    if (p->synced && engine_channel_synced(d->engine, d->channel)) {
+        elapsed = engine_sync_join(d->engine, d->channel);
+        const uint64_t ago = (uint64_t)llround(elapsed);
+        d->clock.origin = d->engine->frame_clock >= ago ? d->engine->frame_clock - ago : 0;
+    } else if (p->synced) {
+        d->clock.origin = now;
+    }
+    cut_notes(s);
+    sampler_set_param(s, AT_SAMPLER_PARAM_LOOP, 1.0f);
+    sampler_play_elapsed(s, elapsed);                       // the running loop fades out
+}
+
 // AT_ParamFn — self = AT_DrumPad*, value = 1 synced / 0 free.
 static void sync_command(void* self, int param, float value) {
     (void)param;
@@ -158,6 +184,11 @@ void drumpad_loop_start(AT_Drumpad* d, int pad) {
     p->loop = true;
     send(d, loop_start_command, d, pad, 0.0f);
     drumpad_emit(d, AT_PAD_EV_LOOP_START, pad, 0, 0.0f, 0.0f);
+}
+
+void drumpad_loop_restart(AT_Drumpad* d, int pad) {
+    if (!get_pad(d, pad)) return;
+    send(d, loop_restart_command, d, pad, 0.0f);
 }
 
 void drumpad_loop_stop(AT_Drumpad* d, int pad) {

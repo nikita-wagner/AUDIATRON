@@ -37,7 +37,7 @@
 #include "core/at_module.h"
 #include "mixer/channel_strip/channel_strip.h"
 
-#define AT_LAYER_MAX      16        // layers per stack
+#define AT_LAYER_MAX      256       // layers per stack (a drumpad: one per pad, up to 16 x 16)
 #define AT_LAYER_INSERTS  2         // chained effects per layer
 
 typedef struct {

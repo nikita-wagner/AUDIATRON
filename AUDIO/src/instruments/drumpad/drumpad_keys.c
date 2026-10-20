@@ -23,7 +23,7 @@
 
 // Pads 1..8 on the home row, 9..16 on the row above: the default. Every
 // drumpad plays the same keys; drumpad_set_pad_keys changes them.
-static const uint16_t k_default_keys[AT_DRUMPAD_PADS] = {
+static const uint16_t k_default_keys[AT_DRUMPAD_PADS] = {         // pads 17.. have no key until one is set
     AT_SC_A, AT_SC_S, AT_SC_D, AT_SC_F, AT_SC_G, AT_SC_H, AT_SC_J, AT_SC_K,
     AT_SC_Q, AT_SC_W, AT_SC_E, AT_SC_R, AT_SC_T, AT_SC_Y, AT_SC_U, AT_SC_I
 };

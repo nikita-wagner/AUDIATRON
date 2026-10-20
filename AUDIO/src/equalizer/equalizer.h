@@ -21,7 +21,9 @@ typedef struct {
     float           freq;           // Hz
     float           q;
     float           gain_db;        // PEAK / SHELF only
-    AT_BiquadCoeffs coeffs;
+    AT_BiquadCoeffs coeffs;         // in use
+    AT_BiquadCoeffs target;         // a retuned band glides here over ~10 ms (no zipper noise on sweeps)
+    uint32_t        glide;          // frames left of the glide, 0 = at the target
     AT_BiquadState  state[AT_MAX_CHANNELS];
 } AT_EQBand;
 

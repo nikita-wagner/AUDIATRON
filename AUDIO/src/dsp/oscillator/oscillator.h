@@ -21,6 +21,7 @@ typedef enum {
     AT_WAVE_SQUARE,     // PolyBLEP band-limited
     AT_WAVE_TRIANGLE,
     AT_WAVE_CIRCLE,
+    AT_WAVE_PLUCK,      // a plucked string: the synth plays it (synth.c), the oscillator gives silence
     AT_WAVE_COUNT
 } AT_Waveform;
 

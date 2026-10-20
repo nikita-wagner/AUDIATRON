@@ -35,10 +35,13 @@ bool layered_keyboard_key(AT_LayeredKeyboard* k, const AT_KeyEvent* ev) {
 
 void layered_keyboard_set_layer(AT_LayeredKeyboard* k, uint32_t layer, bool on) {
     if (layer >= k->layer_count) return;
+    if (!k->layer_name[layer]) on = false;          // a slot this instrument does not use
 
     k->layer_on[layer] = on;
-    engine_set_param(k->engine, layer_stack_set_param, &k->stack,
-                     AT_LAYER_PARAM(layer, AT_LAYER_PARAM_MUTE), on ? 0.0f : 1.0f);
+    if (k->engine)
+        engine_set_param(k->engine, layer_stack_set_param, &k->stack, AT_LAYER_PARAM(layer, AT_LAYER_PARAM_MUTE), on ? 0.0f : 1.0f);
+    else
+        layer_stack_set_param(&k->stack, AT_LAYER_PARAM(layer, AT_LAYER_PARAM_MUTE), on ? 0.0f : 1.0f);
 }
 
 void layered_keyboard_release_all(AT_LayeredKeyboard* k) {

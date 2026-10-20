@@ -36,7 +36,7 @@
 #define AT_APP_MAX_EFFECTS      16
 #define AT_APP_MAX_FX_FLAGS     8
 #define AT_APP_MAX_SOUNDS       4           // --play / --sample files
-#define AT_APP_MAX_PADS         16          // --pad files (one drumpad track)
+#define AT_APP_MAX_PADS         256         // --pad files (one drumpad track): up to every pad
 
 typedef enum {
     AT_APP_MODE_LIVE,
@@ -70,6 +70,7 @@ typedef struct {
     const AT_AppCut* pad_cuts[AT_APP_MAX_PADS]; //   and their parts (NULL = all)
     uint32_t         pad_count;
     const char*      pad_folder;                // drumpad: then the files of this folder
+    uint32_t         folder_pads;               // drumpad: up to this many pads in all from the folder (0 = 16)
     bool             default_kit;               // drumpad: no files, no folder: the "sample" folder (left out if missing)
     bool             from_command_line;         // the console selects the first such track
 } AT_AppTrackSpec;

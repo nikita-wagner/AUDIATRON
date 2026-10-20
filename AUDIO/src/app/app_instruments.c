@@ -132,7 +132,10 @@ static bool load_pads(AT_Drumpad* d, const AT_AppTrackSpec* spec) {
     uint32_t folder_count = 0;
     if (folder) {
         if (!sound_folder_exists(folder)) { fprintf(stderr, "no folder \"%s\"\n", folder); return false; }
-        folder_count = sound_folder_list(folder, folder_paths, AT_DRUMPAD_PADS - spec->pad_count);
+        // as many as the pads shown (AudioStudio's layout; 16 = 4 x 4 by default), after the named files
+        uint32_t room = spec->folder_pads ? spec->folder_pads : AT_DRUMPAD_KEYED_PADS;
+        if (room > AT_DRUMPAD_PADS) room = AT_DRUMPAD_PADS;
+        folder_count = room > spec->pad_count ? sound_folder_list(folder, folder_paths, room - spec->pad_count) : 0;
         if (folder_count == 0) printf("no WAV / MP3 files in \"%s\"\n", folder);
     }
 

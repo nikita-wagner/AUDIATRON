@@ -32,7 +32,10 @@
 #include "sampler/sampler.h"
 #include "synth/synth.h"
 
-static const char* const k_synth[]   = { "wave", "attack", "decay", "sustain", "release", "gain", "detune" };
+static const char* const k_synth[]   = { "wave", "attack", "decay", "sustain", "release", "gain", "detune",
+                                         "filter", "resonance", "filter_env", "filter_decay", "vibrato_rate",
+                                         "vibrato_depth", "vibrato_delay", "bend", "bend_time", "noise",
+                                         "pluck_bright", "pluck_decay" };
 static const char* const k_layers[]  = { "volume", "pan", "mute", "transpose" };
 static const char* const k_sampler[] = { "play", "pause", "stop", "seek", "rate", "loop", "gain", "gate", "root", "from", "to", "from_ms", "to_ms", "delay_ms", "length_ms" };
 static const char* const k_shifter[] = { "semitones", "ratio", "window" };
@@ -235,6 +238,18 @@ void app_object_snapshot(AT_ParamFn fn, const void* object, void (*emit)(void* u
         emit_object(fn, AT_SYNTH_PARAM_RELEASE,  s->adsr.release_s, emit, user);
         emit_object(fn, AT_SYNTH_PARAM_GAIN,     s->gain,           emit, user);
         emit_object(fn, AT_SYNTH_PARAM_DETUNE,   s->detune_cents,   emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_FILTER,        s->filter_hz,     emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_RESONANCE,     s->filter_res,    emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_FILTER_ENV,    s->filter_env,    emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_FILTER_DECAY,  s->filter_decay,  emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_VIBRATO_RATE,  s->vibrato_hz,    emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_VIBRATO_DEPTH, s->vibrato_cents, emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_VIBRATO_DELAY, s->vibrato_delay, emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_BEND,          s->bend_cents,    emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_BEND_TIME,     s->bend_time,     emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_NOISE,         s->noise,         emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_PLUCK_BRIGHT,  s->pluck_bright,  emit, user);
+        emit_object(fn, AT_SYNTH_PARAM_PLUCK_DECAY,   s->pluck_decay,   emit, user);
     }
 }
 
@@ -271,6 +286,18 @@ void app_target_snapshot(const AT_AppTarget* t, void (*emit)(void* user, const c
         emit_param(t, AT_SYNTH_PARAM_RELEASE,  s->adsr.release_s,  emit, user);
         emit_param(t, AT_SYNTH_PARAM_GAIN,     s->gain,            emit, user);
         emit_param(t, AT_SYNTH_PARAM_DETUNE,   s->detune_cents,    emit, user);
+        emit_param(t, AT_SYNTH_PARAM_FILTER,        s->filter_hz,     emit, user);
+        emit_param(t, AT_SYNTH_PARAM_RESONANCE,     s->filter_res,    emit, user);
+        emit_param(t, AT_SYNTH_PARAM_FILTER_ENV,    s->filter_env,    emit, user);
+        emit_param(t, AT_SYNTH_PARAM_FILTER_DECAY,  s->filter_decay,  emit, user);
+        emit_param(t, AT_SYNTH_PARAM_VIBRATO_RATE,  s->vibrato_hz,    emit, user);
+        emit_param(t, AT_SYNTH_PARAM_VIBRATO_DEPTH, s->vibrato_cents, emit, user);
+        emit_param(t, AT_SYNTH_PARAM_VIBRATO_DELAY, s->vibrato_delay, emit, user);
+        emit_param(t, AT_SYNTH_PARAM_BEND,          s->bend_cents,    emit, user);
+        emit_param(t, AT_SYNTH_PARAM_BEND_TIME,     s->bend_time,     emit, user);
+        emit_param(t, AT_SYNTH_PARAM_NOISE,         s->noise,         emit, user);
+        emit_param(t, AT_SYNTH_PARAM_PLUCK_BRIGHT,  s->pluck_bright,  emit, user);
+        emit_param(t, AT_SYNTH_PARAM_PLUCK_DECAY,   s->pluck_decay,   emit, user);
     }
     else if (t->fn == layer_stack_set_param) {
         const AT_LayerStack* st = (const AT_LayerStack*)t->live;

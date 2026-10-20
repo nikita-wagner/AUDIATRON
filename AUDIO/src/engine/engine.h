@@ -14,7 +14,14 @@
 //        [H] AT_HOOK_SOURCE        raw source, before the channel EQ
 //      channel EQ
 //        [H] AT_HOOK_CHANNEL       after the EQ, before fader/pan
-//      fader + pan  ──────────────►  summed into the master bus
+//      fader + pan  ──────────────►  summed into the master bus, or into its bus
+//
+//    buses (only those a channel is sent to, engine_set_channel_bus):
+//      sum of their channels → bus EQ → [H] AT_HOOK_BUS → bus volume / mute → bus meter
+//                   ──────────────►  summed into the master bus
+//      A bus is a group of channels with its own EQ and fader, e.g. "everything
+//      above this master track". A channel on no bus (the default) goes to the
+//      master bus directly.
 //
 //    master bus:
 //        [H] AT_HOOK_MASTER_PRE    sum of all channels, before the master EQ
@@ -50,12 +57,16 @@
 #include "effects/soft_clip/soft_clip.h"
 
 #define AT_ENGINE_CHANNELS    32    // mixer channels (source + EQ + strip each)
+#define AT_ENGINE_NOTES       512   // notes the engine tells apart: MIDI's 0..127 and above (a drumpad's upper pads)
 #define AT_ENGINE_HOOK_SLOTS  4     // chained effects per hook point
 #define AT_ENGINE_TIMED       2048  // commands waiting for their frame (engine_at)
+#define AT_ENGINE_BUSES       8     // groups of channels with their own EQ and fader
+#define AT_EQ_BUS(b)          (-2 - (b))    // the `channel` of a bus's EQ in engine_set_eq_band / _bypass
 
 typedef enum {
     AT_HOOK_SOURCE,
     AT_HOOK_CHANNEL,
+    AT_HOOK_BUS,                    // a bus after its EQ, before its fader (`channel` = the bus)
     AT_HOOK_MASTER_PRE,
     AT_HOOK_MASTER_POST,
     AT_HOOK_OUTPUT,
@@ -78,7 +89,16 @@ typedef struct {
     AT_Equalizer    eq;
     AT_ChannelStrip strip;
     uint64_t        clock_offset;   // this channel's source and effects see frame_clock - clock_offset
+    int             bus;            // the bus it is summed into, -1 = the master bus directly
 } AT_EngineChannel;
+
+typedef struct {
+    AT_Equalizer    eq;
+    float           volume;         // 0..2, 1 = unchanged
+    float           gain;           // what is applied now: follows volume (and mute) without clicks
+    bool            mute;
+    AT_PeakMeter    meter;
+} AT_EngineBus;
 
 // What a control thread asked the engine to do, as seen by an observer
 // (engine_set_observer). The fields that do not apply to a type are 0.
@@ -108,7 +128,7 @@ typedef struct {
     bool              fixed;                        // pinned from outside (a transport): runs, keeps its origin
     double            step;                         // frames between grid points for notes (0 = they play at once)
     double            bar;                          // frames per bar (0 = unknown)
-    uint64_t          note_at[AT_ENGINE_CHANNELS][128];   // where a held-back note-on landed
+    uint64_t          note_at[AT_ENGINE_CHANNELS][AT_ENGINE_NOTES];   // where a held-back note-on landed
     // control side: as last sent
     bool              sent_on[AT_ENGINE_CHANNELS];
     double            sent_step, sent_bar;
@@ -135,6 +155,8 @@ typedef struct {
     uint32_t         timed_count;
 
     AT_EngineChannel channel[AT_ENGINE_CHANNELS];
+    AT_EngineBus     bus[AT_ENGINE_BUSES];
+    float            bus_mem[AT_ENGINE_BUSES][AT_MAX_CHANNELS][AT_MAX_BLOCK_FRAMES];
 
     AT_Equalizer     master_eq;
     AT_MasterFader   master_fader;
@@ -190,9 +212,13 @@ bool engine_set_channel_mute  (AT_Engine* e, uint32_t channel, bool mute);
 // LFOs are in the same phase as when the take was recorded.
 bool engine_set_channel_clock (AT_Engine* e, uint32_t channel, uint64_t offset);
 bool engine_set_master_volume (AT_Engine* e, float volume);
+// Buses: bus = -1 sends the channel to the master bus directly (the default).
+bool engine_set_channel_bus   (AT_Engine* e, uint32_t channel, int bus);
+bool engine_set_bus_volume    (AT_Engine* e, uint32_t bus, float volume);
+bool engine_set_bus_mute      (AT_Engine* e, uint32_t bus, bool mute);
 bool engine_set_limiter       (AT_Engine* e, bool enabled);
 
-// Equalizers. channel = -1 addresses the master EQ.
+// Equalizers. channel = -1 addresses the master EQ, AT_EQ_BUS(b) the EQ of bus b.
 bool engine_set_eq_band  (AT_Engine* e, int channel, uint32_t band, AT_FilterType type,
                           float freq, float q, float gain_db);
 bool engine_set_eq_bypass(AT_Engine* e, int channel, bool bypass);
@@ -255,3 +281,4 @@ void engine_set_observer(AT_Engine* e, AT_EngineObserver fn, void* user);
 
 float engine_master_peak (const AT_Engine* e, uint32_t channel);    // 0 = left, 1 = right
 float engine_channel_peak(const AT_Engine* e, uint32_t channel);
+float engine_bus_peak    (const AT_Engine* e, uint32_t bus, uint32_t channel);

@@ -13,8 +13,11 @@
 
 static inline bool valid_channel(int ch) { return ch >= 0 && ch < AT_ENGINE_CHANNELS; }
 
+static inline bool valid_bus(int b) { return b >= 0 && b < AT_ENGINE_BUSES; }
+
 static AT_Equalizer* eq_for(AT_Engine* e, int ch) {
     if (ch == -1)          return &e->master_eq;
+    if (ch <= -2)          return valid_bus(-2 - ch) ? &e->bus[-2 - ch].eq : NULL;
     if (valid_channel(ch)) return &e->channel[ch].eq;
     return NULL;
 }
@@ -109,6 +112,18 @@ static void apply_command(AT_Engine* e, const AT_Command* c) {
     case AT_CMD_SET_CH_CLOCK:
         if (valid_channel(ch))
             e->channel[ch].clock_offset = ((uint64_t)(uint32_t)c->i[2] << 32) | (uint32_t)c->i[1];
+        break;
+
+    case AT_CMD_SET_CH_BUS:
+        if (valid_channel(ch)) e->channel[ch].bus = valid_bus(c->i[1]) ? c->i[1] : -1;
+        break;
+
+    case AT_CMD_SET_BUS_VOLUME:
+        if (valid_bus(ch)) e->bus[ch].volume = at_clampf(c->f[0], 0.0f, 2.0f);
+        break;
+
+    case AT_CMD_SET_BUS_MUTE:
+        if (valid_bus(ch)) e->bus[ch].mute = c->i[1] != 0;
         break;
 
     case AT_CMD_SET_CH_SYNC:

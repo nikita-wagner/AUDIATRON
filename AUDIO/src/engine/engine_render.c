@@ -29,6 +29,28 @@ static void render_channel(AT_Engine* e, int c, AT_Buffer* strip, AT_Buffer* bus
     channel_strip_mix(&ch->strip, strip, bus);
 }
 
+#define BUS_GLIDE 64             // frames a bus fader glides over to a new value (1.3 ms at 48 kHz): no click, on time
+
+// A bus: its channels' sum → EQ → [H] → volume (gliding, so a change does not click) → meter → (+=) master
+static void render_bus(AT_Engine* e, int b, AT_Buffer* sum, AT_Buffer* master) {
+    AT_EngineBus* bus = &e->bus[b];
+    eq_process(&bus->eq, sum);
+    run_hooks(e->hooks[AT_HOOK_BUS][b], sum);
+    const float target = bus->mute ? 0.0f : bus->volume;
+    const uint32_t glide = sum->frames < BUS_GLIDE ? sum->frames : BUS_GLIDE;
+    const float from = bus->gain, step = glide ? (target - from) / (float)glide : 0.0f;
+    for (uint32_t c = 0; c < sum->channels && c < master->channels; c++) {
+        float g = from;
+        for (uint32_t i = 0; i < sum->frames; i++) {
+            g = i < glide ? g + step : target;
+            sum->ch[c][i] *= g;
+            master->ch[c][i] += sum->ch[c][i];
+        }
+    }
+    bus->gain = target;
+    peak_meter_measure(&bus->meter, sum);
+}
+
 // [H] → EQ → fader → [H] → limiter → meter → [H]
 static void render_master(AT_Engine* e, AT_Buffer* bus) {
     run_hooks(e->hooks[AT_HOOK_MASTER_PRE][0], bus);
@@ -54,8 +76,26 @@ static void render_block(AT_Engine* e, AT_Buffer* bus) {
     };
     for (int c = 0; c < AT_MAX_CHANNELS; c++) strip.ch[c] = e->strip_mem[c];
 
-    for (int c = 0; c < AT_ENGINE_CHANNELS; c++)
-        render_channel(e, c, &strip, bus);
+    // the buses that have channels: cleared, then their channels are summed into them
+    AT_Buffer sums[AT_ENGINE_BUSES];
+    bool used[AT_ENGINE_BUSES] = { false };
+    for (int c = 0; c < AT_ENGINE_CHANNELS; c++) {
+        int b = e->channel[c].bus;
+        if (b < 0 || b >= AT_ENGINE_BUSES || used[b]) continue;
+        used[b] = true;
+        sums[b] = (AT_Buffer){ .channels = bus->channels < AT_MAX_CHANNELS ? bus->channels : AT_MAX_CHANNELS, .frames = bus->frames,
+                               .sample_rate = bus->sample_rate, .frame_clock = e->frame_clock };
+        for (uint32_t k = 0; k < bus->channels && k < AT_MAX_CHANNELS; k++) sums[b].ch[k] = e->bus_mem[b][k];
+        at_buffer_clear(&sums[b]);
+    }
+
+    for (int c = 0; c < AT_ENGINE_CHANNELS; c++) {
+        int b = e->channel[c].bus;
+        render_channel(e, c, &strip, b >= 0 && b < AT_ENGINE_BUSES ? &sums[b] : bus);
+    }
+    for (int b = 0; b < AT_ENGINE_BUSES; b++)
+        if (used[b]) render_bus(e, b, &sums[b], bus);
+        else for (int k = 0; k < AT_MAX_CHANNELS; k++) e->bus[b].meter.peak[k] = 0.0f;   // no channels: silent
 
     render_master(e, bus);
 

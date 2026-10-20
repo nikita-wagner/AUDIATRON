@@ -34,6 +34,7 @@ void piano_keys_default_layout(AT_PianoLayout* out) {
         AT_SC_SEMICOLON   // E (German: Oe)
     };
     for (int i = 0; i < AT_PIANO_KEYS_NOTES; i++) out->note[i] = i < 17 ? notes[i] : 0;
+    for (int i = 0; i < AT_PIANO_KEYS_FIXED; i++) out->fixed[i] = 0;
     out->octave_down = AT_SC_Z;     // German: Y
     out->octave_up   = AT_SC_X;
 }
@@ -57,16 +58,25 @@ static int key_to_semitone(uint16_t scan) {
     return -1;
 }
 
+// Physical key → the note it always plays, -1 = no fixed key.
+static int key_to_fixed(uint16_t scan) {
+    const AT_PianoLayout* l = piano_keys_layout();
+    for (int i = 0; scan && i < AT_PIANO_KEYS_FIXED; i++)
+        if (l->fixed[i] == scan) return i;
+    return -1;
+}
+
 AT_PianoKeysResult piano_keys_event(AT_PianoKeys* k, const AT_KeyEvent* ev, int* note) {
     uint16_t scan = ev->scan_code;
     if (scan >= AT_SC_COUNT || ev->extended) return AT_PIANO_KEYS_NOT_MINE;
 
     int semitone = key_to_semitone(scan);
-    if (semitone >= 0) {
+    int fixed    = semitone < 0 ? key_to_fixed(scan) : -1;
+    if (semitone >= 0 || fixed >= 0) {
         int* held = &k->held[scan];
 
         if (ev->down && *held < 0) {                // first press (auto-repeat is ignored)
-            *held = 12 * (k->octave + 1) + semitone;
+            *held = fixed >= 0 ? fixed : 12 * (k->octave + 1) + semitone;
             *note = *held;
             return AT_PIANO_KEYS_NOTE_ON;
         }
