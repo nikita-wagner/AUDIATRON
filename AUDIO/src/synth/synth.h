@@ -44,6 +44,7 @@ typedef struct {
     double        hz;               // its pitch, without vibrato and scoop
     float         fenv;             // the filter's envelope: 1 at the note-on, then falling
     float         lp1, lp2;         // the filter's state
+    float         fa1, fa2, fa3;    // the filter's coefficients for the current 16 samples of the note
     uint32_t      rng;              // noise
     // a plucked string (AT_WAVE_PLUCK)
     float         pluck[AT_SYNTH_PLUCK_MAX];

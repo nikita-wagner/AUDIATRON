@@ -126,6 +126,8 @@ void synth_note_on(AT_Synth* s, int note, float velocity) {
     v->frames   = 0;
     v->fenv     = 1.0f;
     v->hz       = (double)(at_note_to_freq(note) * at_cents_to_ratio(s->detune_cents));
+    // its noise (breath, a pick's burst) from a seed of its note: every hit of a note sounds the same
+    v->rng      = 0x2545F491u ^ ((uint32_t)(note + 1) * 2654435761u);
     oscillator_set_frequency(&v->osc, v->hz, (double)s->sample_rate);
     if (s->wave == AT_WAVE_PLUCK) pluck_start(s, v);
     adsr_gate_on(&v->env);
@@ -147,7 +149,7 @@ void synth_all_notes_off(AT_Synth* s) {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 
-#define CHUNK 16                    // pitch and filter move every 16 samples
+#define CHUNK 16                    // pitch and filter move every 16 samples of a note, counted from its note-on
 
 void synth_render_mono(AT_Synth* s, float* out, uint32_t frames) {
     memset(out, 0, frames * sizeof(float));
@@ -167,11 +169,14 @@ void synth_render_mono(AT_Synth* s, float* out, uint32_t frames) {
 
         const float amp = v->velocity * s->gain;
         for (uint32_t i = 0; i < frames;) {
-            const uint32_t chunk = frames - i < CHUNK ? frames - i : CHUNK;
+            // the pieces are the note's own, whatever piece of it this call renders: a note sounds the same however
+            // the engine's blocks and commands fall on it (each pass of a loop alike)
+            const uint32_t into  = (uint32_t)(v->frames % CHUNK);
+            const uint32_t chunk = frames - i < CHUNK - into ? frames - i : CHUNK - into;
             const double   t     = (double)v->frames / sr;
 
             // the pitch: vibrato fading in after its delay, a scoop gliding onto the note
-            if (!pluck && (vib || bend)) {
+            if (into == 0 && !pluck && (vib || bend)) {
                 double cents = 0.0;
                 if (vib && t > s->vibrato_delay) {
                     const double fade = (t - s->vibrato_delay) / 0.25;
@@ -181,15 +186,15 @@ void synth_render_mono(AT_Synth* s, float* out, uint32_t frames) {
                 oscillator_set_frequency(&v->osc, v->hz * pow(2.0, cents / 1200.0), (double)sr);
             }
             // the filter: its cutoff follows the note (half as fast) and opens by the envelope
-            float a1 = 0.0f, a2 = 0.0f, a3 = 0.0f;
-            if (filter) {
+            if (into == 0 && filter) {
                 float fc = s->filter_hz * exp2f((float)(v->note - 60) / 24.0f + s->filter_env * v->fenv);
                 fc = at_clampf(fc, 20.0f, 0.45f * sr);
                 const float g = tanf((float)AT_PI * fc / sr);
-                a1 = 1.0f / (1.0f + g * (g + k));
-                a2 = g * a1;
-                a3 = g * a2;
+                v->fa1 = 1.0f / (1.0f + g * (g + k));
+                v->fa2 = g * v->fa1;
+                v->fa3 = g * v->fa2;
             }
+            const float a1 = v->fa1, a2 = v->fa2, a3 = v->fa3;
 
             for (uint32_t j = 0; j < chunk; j++, i++) {
                 const float env = adsr_tick(&v->env, &rates);

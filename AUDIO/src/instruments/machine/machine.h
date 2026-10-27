@@ -155,6 +155,9 @@ typedef enum {
     AT_MACHINE_PARAM_FX_CRUSH,
     AT_MACHINE_PARAM_FX_TREMOLO,
     AT_MACHINE_PARAM_FX_ECHO,
+    AT_MACHINE_PARAM_RESTART,               // any value: the sound starts over from its loop's start where the command
+                                            // lands (a song starting, its loop jumping back): the running sound fades
+                                            // out, its tremolo from the top
     AT_MACHINE_PARAM_CURVE_BASE = 16
 } AT_MachineParam;
 
@@ -198,6 +201,13 @@ typedef struct {
     uint32_t        jump_len;
     float           gain;                   // the gain curve's value, ramped per sample
     bool            started;                // head[0] has been placed in the loop
+    bool            restart;                // AT_MACHINE_PARAM_RESTART: from the loop's start on the next frames
+    // The pieces the sound is worked out in (throttle, gain, rate, loop per piece) keep their own grid across render
+    // calls, started where the sound starts: wherever the engine's blocks and commands cut the calls, each pass of a
+    // song's loop is then cut alike and sounds alike.
+    uint32_t        piece_left;             // frames left in the current piece; 0: a new one
+    float           piece_t, piece_g0;      // its throttle (at its end) and its gain at its start (s->gain at its end)
+    double          piece_from, piece_to, piece_rate, piece_xfade;
 
     // the machine's own effects
     bool            fx_on[AT_MACHINE_FX_COUNT];

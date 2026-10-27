@@ -140,6 +140,7 @@ static void machine_render(AT_Buffer* out, void* self) {
     const bool reading  = has_clip && (s->running || s->run_env > 0.0f);
     if (!reading) {
         s->started = false;
+        s->restart = false;                                         // it starts from the loop's start anyway
         if (!any_fx || s->tail_left == 0) return;
     }
 
@@ -152,27 +153,51 @@ static void machine_render(AT_Buffer* out, void* self) {
     const double clip_to_out = has_clip ? (double)c->sample_rate / rate_out : 1.0;
     const uint32_t jump_frames = (uint32_t)(JUMP_MS * 0.001f * rate_out);
 
-    double from = 0, to = 0;
     for (uint32_t done = 0; done < out->frames; ) {
-        const uint32_t n = out->frames - done < SUB_BLOCK ? out->frames - done : SUB_BLOCK;
+        // starting (or starting over): the pieces' grid from here
+        if (reading && (s->restart || !s->started)) s->piece_left = 0;
 
-        // where the throttle is at the end of this piece
-        s->throttle += (s->throttle_target - s->throttle) * (1.0f - powf(1.0f - smooth, (float)n));
-        const float t = s->throttle;
+        if (s->piece_left == 0) {
+            // a new piece: where the throttle is at its end, and what that makes of the sound
+            s->throttle += (s->throttle_target - s->throttle) * (1.0f - powf(1.0f - smooth, (float)SUB_BLOCK));
+            s->piece_t    = s->throttle;
+            s->piece_left = SUB_BLOCK;
+            if (reading) {
+                const float t = s->piece_t;
+                float gain = curve(s, AT_MACHINE_CURVE_GAIN, t) * s->volume;
+                if (gain < 0.0f) gain = 0.0f;
+                s->piece_g0 = s->gain;
+                s->gain     = gain;
+                loop_region(s, c, t, &s->piece_from, &s->piece_to);
+                double rate = curve(s, AT_MACHINE_CURVE_RATE, t);
+                s->piece_rate = (rate < 0.05 ? 0.05 : rate > 8.0 ? 8.0 : rate) * clip_to_out;
+
+                // the seam's crossfade: at most half the loop, and there must be file before `from` to fade in
+                const double from = s->piece_from, to = s->piece_to;
+                double xfade = s->xfade_ms * 0.001 * c->sample_rate;
+                if (xfade > (to - from) * 0.5) xfade = (to - from) * 0.5;
+                if (xfade > from) xfade = from;
+                if (xfade < 1.0) xfade = 0.0;
+                s->piece_xfade = xfade;
+            }
+        }
+        const uint32_t n   = out->frames - done < s->piece_left ? out->frames - done : s->piece_left;
+        const uint32_t pos = SUB_BLOCK - s->piece_left;            // where in its piece this part starts
+        const float    t   = s->piece_t;
 
         if (reading) {
-            float gain = curve(s, AT_MACHINE_CURVE_GAIN, t) * s->volume;
-            if (gain < 0.0f) gain = 0.0f;
-            loop_region(s, c, t, &from, &to);
-            double rate = curve(s, AT_MACHINE_CURVE_RATE, t);
-            rate = (rate < 0.05 ? 0.05 : rate > 8.0 ? 8.0 : rate) * clip_to_out;
+            const double from = s->piece_from, to = s->piece_to, rate = s->piece_rate, xfade = s->piece_xfade;
 
-            // the seam's crossfade: at most half the loop, and there must be file before `from` to fade in
-            double xfade = s->xfade_ms * 0.001 * c->sample_rate;
-            if (xfade > (to - from) * 0.5) xfade = (to - from) * 0.5;
-            if (xfade > from) xfade = from;
-            if (xfade < 1.0) xfade = 0.0;
-
+            if (s->restart && s->started) {
+                // again from the loop's start, as when it started: the running sound fades out under it
+                s->restart = false;
+                start_jump(s, from, jump_frames);
+                if (engine_channel_synced(s->engine, s->channel) && to > from) {
+                    const double elapsed = engine_sync_join(s->engine, s->channel);
+                    s->head[0] = from + fmod(elapsed * rate, to - from);
+                }
+            }
+            s->restart = false;
             if (!s->started) {
                 s->head[0]   = from;
                 s->jump_left = 0;
@@ -184,7 +209,7 @@ static void machine_render(AT_Buffer* out, void* self) {
                 }
             }
 
-            const float g0 = s->gain, gstep = (gain - g0) / (float)n;
+            const float g0 = s->piece_g0, gstep = (s->gain - g0) / (float)SUB_BLOCK;
             for (uint32_t k = 0; k < n; k++) {
                 if (s->jump_left == 0) {
                     if (s->head[0] >= to - xfade) {
@@ -207,7 +232,7 @@ static void machine_render(AT_Buffer* out, void* self) {
                     wa = sinf(w * HALF_PI);
                     wb = cosf(w * HALF_PI);
                 }
-                const float g = (g0 + gstep * (float)(k + 1)) * s->run_env;
+                const float g = (g0 + gstep * (float)(pos + k + 1)) * s->run_env;
                 const uint32_t i = done + k;
                 for (uint32_t ch = 0; ch < out->channels; ch++) {
                     float v = wa * read_at(c, s->head[0], ch);
@@ -218,18 +243,18 @@ static void machine_render(AT_Buffer* out, void* self) {
                 s->head[0] += rate;
                 if (s->jump_left) { s->head[1] += rate; s->jump_left--; }
             }
-            s->gain = gain;
         }
 
         if (any_fx) apply_fx(s, out, done, n, t, rate_out);
         done += n;
+        s->piece_left -= n;
     }
 
     s->shown_throttle = s->throttle;
     if (reading) {
         s->shown_head_s = (float)(s->head[0] / c->sample_rate);
-        s->shown_from_s = (float)(from / c->sample_rate);
-        s->shown_to_s   = (float)(to / c->sample_rate);
+        s->shown_from_s = (float)(s->piece_from / c->sample_rate);
+        s->shown_to_s   = (float)(s->piece_to / c->sample_rate);
     }
     if (!s->running && s->run_env <= 0.0f) s->started = false;      // the next start begins at the loop's start
 }
@@ -249,6 +274,7 @@ void machine_set_param(void* self, int param, float value) {
     case AT_MACHINE_PARAM_RUNNING:   s->running = value > 0.5f; return;
     case AT_MACHINE_PARAM_VOLUME:    s->volume = at_clampf(value, 0.0f, 4.0f); return;
     case AT_MACHINE_PARAM_SMOOTH_MS: s->smooth_ms = at_clampf(value, 1.0f, 5000.0f); return;
+    case AT_MACHINE_PARAM_RESTART:   s->restart = true; s->tremolo_phase = 0.0; return;
     case AT_MACHINE_PARAM_XFADE_MS:  s->xfade_ms = at_clampf(value, 0.0f, 1000.0f); return;
     case AT_MACHINE_PARAM_CLIP:
         s->slot    = (int)value & 1;

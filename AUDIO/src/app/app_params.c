@@ -45,7 +45,7 @@ static const char* const k_echo[]    = { "time", "feedback", "mix", "damping", "
 // "track 6 machine throttle 0.45", "track 6 machine to_full 3". The ids have gaps (the curves start at 16): NULL there.
 static const char* const k_machine[] = {
     "throttle", "running", "volume", "smooth_ms", "xfade_ms", "clip", "fx_eq", "fx_crush",
-    "fx_tremolo", "fx_echo", NULL, NULL, NULL, NULL, NULL, NULL,
+    "fx_tremolo", "fx_echo", "restart", NULL, NULL, NULL, NULL, NULL,
     "gain_idle", "gain_full", "gain_shape", "gain_amount", "gain_point1", "gain_point2", "gain_point3", NULL,
     "from_idle", "from_full", "from_shape", "from_amount", "from_point1", "from_point2", "from_point3", NULL,
     "to_idle", "to_full", "to_shape", "to_amount", "to_point1", "to_point2", "to_point3", NULL,

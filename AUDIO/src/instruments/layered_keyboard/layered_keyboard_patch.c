@@ -17,6 +17,15 @@
 //    trumpet     the low-pass opens fast and far at the start (the brassy
 //                "blat"), a clear scoop up onto the note, late vibrato, breath
 //    contrabass  the violin's recipe an octave down, darker; or plucked
+//    harp, lyre, mandolin, lute, bass   plucked strings: how bright the pick, how long they ring,
+//                doubled courses a few cents (or an octave) apart
+//    cello, clarinet, harmonica, bagpipe, euphonium   bowed and blown: a filter that bites at the
+//                start, vibrato, breath; a clarinet's square wave has only the odd harmonics
+//    chime, gong, cowbell   metal is not harmonic: its partials are layers tuned to exact ratios
+//                (transpose + detune: a bar 1 : 2.756 : 5.404, a gong 1 : 1.52 : 2.31 : 3.14, a
+//                cowbell's two squares 1 : 1.48), each dying away at its own pace
+//    bongo       a sine that drops onto its pitch (a struck skin) with a noise slap
+//  The bagpipe's drones follow the notes (an octave and two below), not one fixed note.
 //  Slightly different tunings (detune) make layers drift against each other
 //  instead of fusing into one static waveform: that is most of what makes a
 //  layered sound feel "full".
@@ -136,6 +145,124 @@ static const KeysInstrument k_instruments[] = {
           .filter_hz = 1100.0f, .filter_res = 0.20f, .filter_env = 1.8f, .filter_decay = 0.14f,
           .bend_cents = -70.0f, .bend_time = 0.035f },
     } },
+    { "harp", "Harp", {
+        { .name = "string",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 8.0f, 1.0f, 0.60f },
+          .volume = 1.00f, .gain = 0.35f, .filter_hz = 4500.0f, .pluck_bright = 0.30f, .pluck_decay = 4.0f },
+        { .name = "shimmer", .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 4.0f, 1.0f, 0.40f }, .transpose = 12, .detune_cents = 3.0f,
+          .volume = 0.15f, .pan = 0.20f, .gain = 0.30f, .pluck_bright = 0.20f, .pluck_decay = 1.5f },
+        { .name = "warmth",  .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 2.50f, 0.0f, 0.50f }, .volume = 0.25f },
+    } },
+    { "lyre", "Lyre", {
+        { .name = "string",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 6.0f, 1.0f, 0.30f },
+          .volume = 1.00f, .pan = -0.10f, .gain = 0.35f, .filter_hz = 4000.0f, .pluck_bright = 0.45f, .pluck_decay = 2.2f },
+        { .name = "double",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 6.0f, 1.0f, 0.30f }, .detune_cents = 7.0f,
+          .volume = 0.50f, .pan = 0.20f, .gain = 0.35f, .pluck_bright = 0.35f, .pluck_decay = 1.8f },
+        { .name = "body",    .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.15f, 0.0f, 0.10f }, .transpose = -12, .volume = 0.20f },
+    } },
+    { "mandolin", "Mandolin", {
+        { .name = "course",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 4.0f, 1.0f, 0.15f },
+          .volume = 1.00f, .pan = -0.25f, .gain = 0.33f, .filter_hz = 7000.0f, .pluck_bright = 0.80f, .pluck_decay = 1.0f },
+        { .name = "pair",    .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 4.0f, 1.0f, 0.15f }, .detune_cents = 8.0f,
+          .volume = 0.90f, .pan = 0.25f, .gain = 0.33f, .filter_hz = 7000.0f, .pluck_bright = 0.75f, .pluck_decay = 0.9f },
+        { .name = "body",    .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.10f, 0.0f, 0.08f }, .transpose = -12, .volume = 0.15f },
+    } },
+    { "lute", "Lute", {
+        { .name = "treble",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 5.0f, 1.0f, 0.25f },
+          .volume = 1.00f, .gain = 0.35f, .filter_hz = 3000.0f, .pluck_bright = 0.30f, .pluck_decay = 1.6f },
+        { .name = "octave",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 5.0f, 1.0f, 0.25f }, .transpose = -12, .detune_cents = 4.0f,
+          .volume = 0.55f, .pan = 0.20f, .gain = 0.35f, .pluck_bright = 0.25f, .pluck_decay = 1.4f },
+        { .name = "body",    .wave = AT_WAVE_TRIANGLE, .adsr = { 0.001f, 0.20f, 0.0f, 0.10f }, .transpose = -12, .volume = 0.20f },
+    } },
+    { "bass", "Bass", {
+        { .name = "string",  .wave = AT_WAVE_PLUCK,    .adsr = { 0.001f, 6.0f, 1.0f, 0.12f }, .transpose = -12,
+          .volume = 1.00f, .gain = 0.45f, .filter_hz = 1200.0f, .pluck_bright = 0.30f, .pluck_decay = 3.5f },
+        { .name = "growl",   .wave = AT_WAVE_SAW,      .adsr = { 0.001f, 0.60f, 0.30f, 0.12f }, .transpose = -12,
+          .volume = 0.45f, .filter_hz = 350.0f, .filter_res = 0.20f, .filter_env = 1.2f, .filter_decay = 0.12f },
+        { .name = "sub",     .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.80f, 0.40f, 0.12f }, .transpose = -24, .volume = 0.35f },
+    } },
+    { "cello", "Cello", {
+        { .name = "bow",     .wave = AT_WAVE_SAW,      .adsr = { 0.10f, 0.30f, 0.90f, 0.35f }, .transpose = -12,
+          .volume = 1.00f, .gain = 0.27f,
+          .filter_hz = 1700.0f, .filter_res = 0.30f, .filter_env = 0.8f, .filter_decay = 0.22f,
+          .vibrato_hz = 5.2f, .vibrato_cents = 18.0f, .vibrato_delay = 0.25f,
+          .bend_cents = -15.0f, .bend_time = 0.06f, .noise = 0.05f },
+        { .name = "body",    .wave = AT_WAVE_SAW,      .adsr = { 0.12f, 0.30f, 0.85f, 0.35f }, .transpose = -12, .detune_cents = 5.0f,
+          .volume = 0.35f, .pan = 0.20f, .filter_hz = 2600.0f, .filter_res = 0.20f,
+          .vibrato_hz = 5.5f, .vibrato_cents = 12.0f, .vibrato_delay = 0.30f },
+    } },
+    { "clarinet", "Clarinet", {
+        { .name = "reed",    .wave = AT_WAVE_SQUARE,   .adsr = { 0.045f, 0.20f, 0.90f, 0.10f },
+          .volume = 1.00f, .gain = 0.22f,
+          .filter_hz = 2200.0f, .filter_res = 0.20f, .filter_env = 0.4f, .filter_decay = 0.20f,
+          .vibrato_hz = 5.0f, .vibrato_cents = 5.0f, .vibrato_delay = 0.60f, .noise = 0.03f },
+        { .name = "core",    .wave = AT_WAVE_SINE,     .adsr = { 0.050f, 0.20f, 0.90f, 0.10f }, .volume = 0.40f },
+    } },
+    { "harmonica", "Harmonica", {
+        { .name = "reed",    .wave = AT_WAVE_SQUARE,   .adsr = { 0.040f, 0.20f, 0.85f, 0.08f },
+          .volume = 1.00f, .gain = 0.22f,
+          .filter_hz = 1800.0f, .filter_res = 0.45f, .filter_env = 0.6f, .filter_decay = 0.15f,
+          .vibrato_hz = 5.5f, .vibrato_cents = 10.0f, .vibrato_delay = 0.35f,
+          .bend_cents = -25.0f, .bend_time = 0.04f, .noise = 0.05f },
+        { .name = "reed 2",  .wave = AT_WAVE_SAW,      .adsr = { 0.040f, 0.20f, 0.85f, 0.08f }, .detune_cents = 6.0f,
+          .volume = 0.40f, .pan = 0.10f, .filter_hz = 2400.0f, .filter_res = 0.30f },
+    } },
+    { "bagpipe", "Bagpipe", {
+        { .name = "chanter", .wave = AT_WAVE_SAW,      .adsr = { 0.020f, 0.10f, 1.00f, 0.05f },
+          .volume = 1.00f, .gain = 0.22f, .filter_hz = 3800.0f, .filter_res = 0.55f,
+          .vibrato_hz = 6.5f, .vibrato_cents = 4.0f, .noise = 0.02f },
+        { .name = "reed",    .wave = AT_WAVE_SQUARE,   .adsr = { 0.020f, 0.10f, 1.00f, 0.05f }, .detune_cents = -4.0f,
+          .volume = 0.45f, .filter_hz = 2500.0f, .filter_res = 0.40f },
+        { .name = "drone",   .wave = AT_WAVE_SAW,      .adsr = { 0.030f, 0.10f, 1.00f, 0.10f }, .transpose = -12,
+          .volume = 0.45f, .pan = -0.30f, .filter_hz = 900.0f, .filter_res = 0.30f },
+        { .name = "bass drone", .wave = AT_WAVE_SAW,   .adsr = { 0.030f, 0.10f, 1.00f, 0.10f }, .transpose = -24,
+          .volume = 0.35f, .pan = 0.30f, .filter_hz = 500.0f },
+    } },
+    { "euphonium", "Euphonium", {
+        { .name = "brass",   .wave = AT_WAVE_SAW,      .adsr = { 0.040f, 0.30f, 0.85f, 0.15f }, .transpose = -12,
+          .volume = 1.00f, .gain = 0.26f,
+          .filter_hz = 450.0f, .filter_res = 0.20f, .filter_env = 1.6f, .filter_decay = 0.25f,
+          .vibrato_hz = 5.0f, .vibrato_cents = 8.0f, .vibrato_delay = 0.50f,
+          .bend_cents = -40.0f, .bend_time = 0.05f, .noise = 0.03f },
+        { .name = "mellow",  .wave = AT_WAVE_TRIANGLE, .adsr = { 0.050f, 0.30f, 0.90f, 0.15f }, .transpose = -12, .volume = 0.50f },
+        { .name = "edge",    .wave = AT_WAVE_SQUARE,   .adsr = { 0.040f, 0.30f, 0.80f, 0.15f }, .transpose = -12, .detune_cents = 4.0f,
+          .volume = 0.20f, .filter_hz = 700.0f, .filter_env = 1.2f, .filter_decay = 0.20f },
+    } },
+    { "chime", "Chime", {
+        { .name = "strike",  .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 4.00f, 0.0f, 1.50f }, .transpose = 12,
+          .volume = 1.00f, .gain = 0.25f },
+        { .name = "2.76",    .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 2.00f, 0.0f, 1.00f }, .transpose = 30, .detune_cents = -45.0f,
+          .volume = 0.45f, .pan = -0.15f, .gain = 0.25f },
+        { .name = "5.40",    .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.90f, 0.0f, 0.60f }, .transpose = 41, .detune_cents = 21.0f,
+          .volume = 0.25f, .pan = 0.15f, .gain = 0.25f },
+    } },
+    { "gong", "Gong", {
+        { .name = "boom",    .wave = AT_WAVE_SINE,     .adsr = { 0.020f, 6.00f, 0.0f, 3.00f }, .transpose = -12,
+          .volume = 1.00f, .gain = 0.30f },
+        { .name = "1.52",    .wave = AT_WAVE_SINE,     .adsr = { 0.150f, 5.00f, 0.0f, 3.00f }, .transpose = -5, .detune_cents = 25.0f,
+          .volume = 0.60f, .pan = -0.20f, .tremolo_hz = 0.8f, .tremolo_depth = 0.30f },
+        { .name = "2.31",    .wave = AT_WAVE_SINE,     .adsr = { 0.400f, 4.00f, 0.0f, 2.50f }, .transpose = 3, .detune_cents = -51.0f,
+          .volume = 0.45f, .pan = 0.20f, .tremolo_hz = 1.3f, .tremolo_depth = 0.35f },
+        { .name = "3.14",    .wave = AT_WAVE_SINE,     .adsr = { 0.700f, 3.50f, 0.0f, 2.00f }, .transpose = 8, .detune_cents = -20.0f,
+          .volume = 0.30f, .tremolo_hz = 2.1f, .tremolo_depth = 0.40f },
+        { .name = "hit",     .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.60f, 0.0f, 0.40f }, .transpose = -12,
+          .volume = 0.35f, .filter_hz = 1500.0f, .filter_res = 0.30f, .noise = 0.60f },
+    } },
+    { "cowbell", "Cowbell", {
+        { .name = "tone",    .wave = AT_WAVE_SQUARE,   .adsr = { 0.001f, 0.35f, 0.0f, 0.08f },
+          .volume = 0.80f, .gain = 0.25f, .filter_hz = 2600.0f, .filter_res = 0.55f },
+        { .name = "1.48",    .wave = AT_WAVE_SQUARE,   .adsr = { 0.001f, 0.30f, 0.0f, 0.08f }, .transpose = 7, .detune_cents = -20.0f,
+          .volume = 0.70f, .gain = 0.25f, .filter_hz = 2600.0f, .filter_res = 0.55f },
+        { .name = "click",   .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.03f, 0.0f, 0.02f },
+          .volume = 0.25f, .filter_hz = 6000.0f, .noise = 0.50f },
+    } },
+    { "bongo", "Bongo", {
+        { .name = "head",    .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.28f, 0.0f, 0.10f },
+          .volume = 1.00f, .gain = 0.40f, .bend_cents = 500.0f, .bend_time = 0.025f },
+        { .name = "skin",    .wave = AT_WAVE_TRIANGLE, .adsr = { 0.001f, 0.12f, 0.0f, 0.05f }, .transpose = 12, .detune_cents = 30.0f,
+          .volume = 0.30f, .bend_cents = 400.0f, .bend_time = 0.02f },
+        { .name = "slap",    .wave = AT_WAVE_SINE,     .adsr = { 0.001f, 0.04f, 0.0f, 0.02f },
+          .volume = 0.35f, .filter_hz = 3000.0f, .filter_res = 0.20f, .noise = 0.70f },
+    } },
 };
 
 #define INSTRUMENT_COUNT ((int)(sizeof k_instruments / sizeof *k_instruments))
@@ -143,11 +270,32 @@ static const KeysInstrument k_instruments[] = {
 int layered_keyboard_instrument_count(void) { return INSTRUMENT_COUNT; }
 
 const char* layered_keyboard_instrument_name(int i) {
-    return i >= 0 && i < INSTRUMENT_COUNT ? k_instruments[i].name : "?";
+    return i >= 0 && i < INSTRUMENT_COUNT ? k_instruments[i].name : "Custom";
 }
 
 const char* layered_keyboard_instrument_word(int i) {
-    return i >= 0 && i < INSTRUMENT_COUNT ? k_instruments[i].word : "?";
+    return i >= 0 && i < INSTRUMENT_COUNT ? k_instruments[i].word : "custom";
+}
+
+// the voice-th layer an instrument uses (its rows with a name)
+static const LayerPatch* voice_of(int instrument, int voice) {
+    if (instrument < 0 || instrument >= INSTRUMENT_COUNT) return NULL;
+    for (int i = 0, n = 0; i < AT_LAYERED_KEYS_MAX; i++) {
+        const LayerPatch* p = &k_instruments[instrument].layers[i];
+        if (p->name && n++ == voice) return p;
+    }
+    return NULL;
+}
+
+int layered_keyboard_voice_count(int instrument) {
+    int n = 0;
+    while (voice_of(instrument, n)) n++;
+    return n;
+}
+
+const char* layered_keyboard_voice_name(int instrument, int voice) {
+    const LayerPatch* p = voice_of(instrument, voice);
+    return p ? p->name : "?";
 }
 
 int layered_keyboard_instrument_find(const char* word) {
@@ -163,9 +311,10 @@ static void set(AT_LayeredKeyboard* k, AT_ParamFn fn, void* self, int param, flo
 }
 
 static void build_help(AT_LayeredKeyboard* k) {
+    const char* name = k->instrument >= 0 ? k_instruments[k->instrument].name : k->custom_name[0] ? k->custom_name : "Custom";
     int used = snprintf(k->help, sizeof k->help,
-                        PIANO_KEYS_HELP "  Y / X  octave -/+      %s: 1..%u  layer on/off (",
-                        k_instruments[k->instrument].name, k->layer_count);
+                        PIANO_KEYS_HELP "  Y / X  octave -/+      %s: 1..%u  layer on/off (", name,
+                        k->layer_count < AT_LAYERED_KEYS_KEYED ? k->layer_count : AT_LAYERED_KEYS_KEYED);
     bool first = true;
     for (uint32_t i = 0; i < k->layer_count && used > 0 && (size_t)used < sizeof k->help; i++) {
         if (!k->layer_name[i]) continue;
@@ -176,15 +325,8 @@ static void build_help(AT_LayeredKeyboard* k) {
         snprintf(k->help + used, sizeof k->help - (size_t)used, ")\n");
 }
 
-void layered_keyboard_set_instrument(AT_LayeredKeyboard* k, int index) {
-    if (index < 0 || index >= INSTRUMENT_COUNT) return;
-    const KeysInstrument* ins = &k_instruments[index];
-    k->instrument = index;
-
-    for (uint32_t i = 0; i < k->layer_count; i++) {
-        const LayerPatch* p    = &ins->layers[i];
-        const bool        used = p->name != NULL;
-        if (used) {
+// one slot's sound as a table row has it (its label and on / off: layered_keyboard_set_slot)
+static void apply_patch(AT_LayeredKeyboard* k, uint32_t i, const LayerPatch* p) {
             AT_Synth* s = &k->synths[i];
             set(k, synth_set_param, s, AT_SYNTH_PARAM_WAVEFORM,      (float)p->wave);
             set(k, synth_set_param, s, AT_SYNTH_PARAM_ATTACK,        p->adsr.attack_s);
@@ -210,13 +352,42 @@ void layered_keyboard_set_instrument(AT_LayeredKeyboard* k, int index) {
             set(k, layer_stack_set_param, &k->stack, AT_LAYER_PARAM(i, AT_LAYER_PARAM_TRANSPOSE), (float)p->transpose);
             set(k, tremolo_set_param, &k->motion[i], AT_TREMOLO_PARAM_RATE,  p->tremolo_hz > 0.0f ? p->tremolo_hz : 5.0f);
             set(k, tremolo_set_param, &k->motion[i], AT_TREMOLO_PARAM_DEPTH, p->tremolo_hz > 0.0f ? p->tremolo_depth : 0.0f);
-        }
-        k->layer_name[i]       = used ? p->name : NULL;
-        k->stack.layers[i].name = used ? p->name : "-";
-        k->layer_on[i]         = used;
-        set(k, layer_stack_set_param, &k->stack, AT_LAYER_PARAM(i, AT_LAYER_PARAM_MUTE), used ? 0.0f : 1.0f);
+}
+
+void layered_keyboard_set_slot(AT_LayeredKeyboard* k, uint32_t slot, const char* label) {
+    if (slot >= k->layer_count) return;
+    const bool used = label && *label;
+    if (used) {
+        snprintf(k->label[slot], sizeof k->label[slot], "%s", label);
+        k->layer_name[slot]       = k->label[slot];
+        k->stack.layers[slot].name = k->label[slot];
+    } else {
+        k->layer_name[slot]       = NULL;
+        k->stack.layers[slot].name = "-";
     }
+    k->layer_on[slot] = used;
+    set(k, layer_stack_set_param, &k->stack, AT_LAYER_PARAM(slot, AT_LAYER_PARAM_MUTE), used ? 0.0f : 1.0f);
     build_help(k);
+}
+
+void layered_keyboard_set_voice(AT_LayeredKeyboard* k, uint32_t slot, int instrument, int voice) {
+    const LayerPatch* p = voice_of(instrument, voice);
+    if (!p || slot >= k->layer_count) return;
+    apply_patch(k, slot, p);
+    k->instrument = -1;                                     // built by hand now
+    layered_keyboard_set_slot(k, slot, p->name);
+}
+
+void layered_keyboard_set_instrument(AT_LayeredKeyboard* k, int index) {
+    if (index < 0 || index >= INSTRUMENT_COUNT) return;
+    const KeysInstrument* ins = &k_instruments[index];
+    k->instrument     = index;
+    k->custom_name[0] = '\0';
+    for (uint32_t i = 0; i < k->layer_count; i++) {
+        const LayerPatch* p = &ins->layers[i];
+        if (p->name) apply_patch(k, i, p);
+        layered_keyboard_set_slot(k, i, p->name);
+    }
 }
 
 // Called from init: every slot a synth with a tremolo after it, then the first instrument.

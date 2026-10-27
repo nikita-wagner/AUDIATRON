@@ -21,8 +21,8 @@ bool layered_keyboard_key(AT_LayeredKeyboard* k, const AT_KeyEvent* ev) {
     case AT_PIANO_KEYS_NOT_MINE: break;
     }
 
-    // layer on/off: keys 1..N in layer order
-    if (scan >= AT_SC_1 && (uint32_t)(scan - AT_SC_1) < k->layer_count) {
+    // layer on/off: keys 1..N in layer order (at most 1..8: key 9 is the app's)
+    if (scan >= AT_SC_1 && (uint32_t)(scan - AT_SC_1) < k->layer_count && (uint32_t)(scan - AT_SC_1) < AT_LAYERED_KEYS_KEYED) {
         if (ev->down && !ev->repeat) {
             uint32_t layer = (uint32_t)(scan - AT_SC_1);
             layered_keyboard_set_layer(k, layer, !k->layer_on[layer]);

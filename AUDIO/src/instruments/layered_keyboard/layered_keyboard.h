@@ -22,7 +22,8 @@
 #include "layers/layer_stack.h"
 #include "synth/synth.h"
 
-#define AT_LAYERED_KEYS_MAX 4           // layer slots of a layered keyboard (its stack could hold more)
+#define AT_LAYERED_KEYS_MAX 9           // layer slots of a layered keyboard (its stack could hold more)
+#define AT_LAYERED_KEYS_KEYED 8         // the first this many switch on / off with keys 1..8 (9 is the app's)
 
 typedef struct {
     AT_LayerStack stack;                        // the sound source (rendered by the engine)
@@ -34,8 +35,10 @@ typedef struct {
     uint32_t      channel;
     AT_PianoKeys  keys;                         // octave + which key holds which note
     uint32_t      layer_count;                  // slots (the instrument may leave some silent)
-    int           instrument;                   // layered_keyboard_set_instrument
-    const char*   layer_name[AT_LAYERED_KEYS_MAX];  // NULL = a slot this instrument does not use
+    int           instrument;                   // layered_keyboard_set_instrument; -1 = built by hand ("custom")
+    char          custom_name[40];              // a built one's name ("" = "Custom")
+    const char*   layer_name[AT_LAYERED_KEYS_MAX];  // NULL = a slot this instrument does not use (else its label)
+    char          label[AT_LAYERED_KEYS_MAX][24];
     bool          layer_on[AT_LAYERED_KEYS_MAX];
     char          help[320];
 } AT_LayeredKeyboard;
@@ -54,7 +57,15 @@ int         layered_keyboard_instrument_count(void);
 const char* layered_keyboard_instrument_name(int i);          // "Acoustic Guitar"
 const char* layered_keyboard_instrument_word(int i);          // "guitar" (project files)
 int         layered_keyboard_instrument_find(const char* word);   // -1 = none
-void        layered_keyboard_set_instrument(AT_LayeredKeyboard* k, int i);
+void        layered_keyboard_set_instrument(AT_LayeredKeyboard* k, int i);   // i = -1: nothing changes
+
+// Building your own (control thread, also while playing). Every instrument's layers are voices to pick from: a
+// slot takes one (its synth, tremolo, volume, pan, transpose) and the keyboard becomes "custom".
+int         layered_keyboard_voice_count(int instrument);                 // the layers it uses
+const char* layered_keyboard_voice_name(int instrument, int voice);
+void        layered_keyboard_set_voice(AT_LayeredKeyboard* k, uint32_t slot, int instrument, int voice);
+// A slot in use with this label, or (label NULL / "") not used: silent. Its sound is not touched.
+void        layered_keyboard_set_slot(AT_LayeredKeyboard* k, uint32_t slot, const char* label);
 
 // ─── used between the files of this folder ───────────────────────────────────
 
