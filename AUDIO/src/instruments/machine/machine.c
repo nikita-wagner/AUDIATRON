@@ -326,7 +326,8 @@ static void machine_status(void* self, char* out, size_t cap) {
     char gear[64] = "";
     if (m->gearbox.mode != AT_MACHINE_GEARBOX_OFF) {
         char g[8];
-        if (m->drive.gear == 0) snprintf(g, sizeof g, "N");
+        if (m->drive.gear == 0)      snprintf(g, sizeof g, "N");
+        else if (m->drive.gear < 0)  snprintf(g, sizeof g, "R");
         else                    snprintf(g, sizeof g, "%d", m->drive.gear);
         snprintf(gear, sizeof gear, " %s %s %.0frpm %.0fkm/h%s", m->gearbox.mode == AT_MACHINE_GEARBOX_AUTOMATIC ? "auto" : "manual",
                  g, m->drive.rpm, m->drive.speed, m->drive.phase ? " shifting" : "");

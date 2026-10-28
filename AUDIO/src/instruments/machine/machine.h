@@ -62,6 +62,15 @@
 //      automatic               up at the gear's up_rpm x the shift-point curve
 //                              over the pedal (light foot: early, full pedal: at the
 //                              limit), down below down_rpm, kickdown at full pedal
+//      the brake pedal         slows the vehicle by brake_power (km/h per second
+//                              at full pedal), whatever the clutch does (S held:
+//                              the brake fully down)
+//      reverse                 R: its own ratio; only put in (or taken out of) at a
+//                              standstill; the speed then is how fast backwards
+//      the clutch pedal        pressed, the engine comes apart from the wheels and
+//                              revs freely (no pull, no engine braking); let up, it
+//                              bites again: the rpm goes back to the wheels' as the
+//                              pedal rises (a shift's own clutch works as before)
 //
 //  The resulting rev goes to the sound as the throttle parameter, so a
 //  recording has the engine as it sounded and the replay needs no gearbox.
@@ -268,13 +277,16 @@ typedef struct {
     float           power;                  // km/h per second at full pedal in first gear
     float           drag;                   // slowing at 100 km/h, km/h per second (grows with speed squared)
     float           engine_brake;           // slowing with the pedal up at the rev limit, km/h per second
+    float           brake_power;            // slowing with the brake pedal fully down, km/h per second
     AT_MachineCurve shift_point;            // automatic: up_rpm x this curve's value at the pedal
     AT_MachineGear  gear[AT_MACHINE_GEARS];
+    AT_MachineGear  reverse;                // R: its ratio and how a shift into it goes (up / down: unused; the
+                                            // automatic never picks it, it is only put in at a standstill)
 } AT_MachineGearbox;
 
 // What the gearbox is doing now (control thread).
 typedef struct {
-    int             gear;                   // 0 = neutral
+    int             gear;                   // 0 = neutral, -1 = reverse (speed: how fast backwards then)
     int             target;                 // the gear a shift goes into
     int             phase;                  // 0 driving, 1 clutch out, 2 shifting, 3 clutch in
     float           phase_s;                // seconds into the phase
@@ -321,6 +333,8 @@ typedef struct {
     AT_MachineGearbox gearbox;
     AT_MachineDrive  drive;
     bool             shift_up, shift_down;  // A / D pressed since the last tick
+    float            brake_pedal;           // 0..1: the brake pressed (it slows the vehicle by brake_power at 1)
+    float            clutch_pedal;          // 0..1: the clutch pedal pressed (1: the engine apart from the wheels)
     float            sent;                  // the last value the sound got as its throttle
     AT_MachineBuiltin builtin;              // which built-in sound plays (when path is "")
 
@@ -399,7 +413,10 @@ bool machine_load_preset (AT_Machine* m, const char* path, unsigned parts, char*
 // machine_gearbox.c — control thread
 void machine_gearbox_defaults(AT_MachineGearbox* g);                // a six-speed car
 void machine_set_gearbox_mode(AT_Machine* m, AT_MachineGearboxMode mode);
-void machine_shift(AT_Machine* m, int direction);                   // +1 up, -1 down (0 = neutral below 1st)
+void machine_shift(AT_Machine* m, int direction);                   // +1 up, -1 down (0 = neutral below 1st, R below it)
+// Straight into a gear (-1 R, 0 N, 1 .. gears), by a normal shift. Into R or out of it (but to N): only at a standstill
+// (at most 3 km/h). false: not now (the gearbox off, a shift going on, no such gear, moving)
+bool machine_select_gear(AT_Machine* m, int gear);
 void machine_drive_step(AT_Machine* m, float dt);                   // moves the engine and the vehicle on
 float machine_gearbox_shift_rpm(const AT_Machine* m, int gear);     // automatic: shift-up rpm at the pedal now
 extern const char* const AT_MACHINE_GEARBOX_MODE_NAMES[3];          // "off", "manual", "automatic"

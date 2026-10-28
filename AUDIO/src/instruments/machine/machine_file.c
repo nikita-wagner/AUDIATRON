@@ -134,13 +134,15 @@ void machine_settings_snapshot(const AT_Machine* m, unsigned parts, void (*emit)
         put_line(&l, "gearbox power", g->power);
         put_line(&l, "gearbox drag", g->drag);
         put_line(&l, "gearbox engine_brake", g->engine_brake);
+        put_line(&l, "gearbox brake_power", g->brake_power);
         add(&l, "gearbox shift_point");
         put_curve(&l, &g->shift_point);
         done(&l);
-        for (int i = 0; i < AT_MACHINE_GEARS; i++) {
-            const AT_MachineGear* gear = &g->gear[i];
+        for (int i = 0; i <= AT_MACHINE_GEARS; i++) {         // (the last: reverse, "gear R")
+            const AT_MachineGear* gear = i < AT_MACHINE_GEARS ? &g->gear[i] : &g->reverse;
             const float fields[7] = { gear->ratio, gear->up_rpm, gear->down_rpm, gear->clutch_out_ms, gear->shift_ms, gear->clutch_in_ms, gear->lift };
-            add(&l, "gear %d", i + 1);
+            if (i < AT_MACHINE_GEARS) add(&l, "gear %d", i + 1);
+            else                      add(&l, "gear R");
             for (int k = 0; k < 7; k++) put(&l, fields[k]);
             put_curve(&l, &gear->momentum);
             done(&l);
@@ -286,18 +288,24 @@ bool machine_read_setting(AT_Machine* m, const char* line, unsigned parts, const
             else if (!strcmp(word, "power") && num)        g->power = at_clampf(x, 0.0f, 500.0f);
             else if (!strcmp(word, "drag") && num)         g->drag = at_clampf(x, 0.0f, 100.0f);
             else if (!strcmp(word, "engine_brake") && num) g->engine_brake = at_clampf(x, 0.0f, 100.0f);
+            else if (!strcmp(word, "brake_power") && num)  g->brake_power = at_clampf(x, 0.0f, 200.0f);
             else if (!strcmp(word, "shift_point"))         read_curve_fields(value, &g->shift_point);
             return true;
         }
         if (!strcmp(key, "gear")) {
             int gear = 0, n = 0;
             AT_MachineGear set;
-            if (sscanf(rest, "%d%n", &gear, &n) != 1 || gear < 1 || gear > AT_MACHINE_GEARS) return true;
-            set = g->gear[gear - 1];
+            AT_MachineGear* into = NULL;
+            if (rest[0] == 'R' && (rest[1] == ' ' || rest[1] == '\t'))      // reverse
+                into = &g->reverse, n = 1;
+            else if (sscanf(rest, "%d%n", &gear, &n) == 1 && gear >= 1 && gear <= AT_MACHINE_GEARS)
+                into = &g->gear[gear - 1];
+            if (!into) return true;
+            set = *into;
             int used2 = 0;
             if (sscanf(rest + n, " %f %f %f %f %f %f %f%n", &set.ratio, &set.up_rpm, &set.down_rpm, &set.clutch_out_ms, &set.shift_ms,
                        &set.clutch_in_ms, &set.lift, &used2) == 7 && read_curve_fields(rest + n + used2, &set.momentum))
-                g->gear[gear - 1] = set;
+                *into = set;
             return true;
         }
     }

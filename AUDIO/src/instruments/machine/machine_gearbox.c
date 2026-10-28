@@ -52,6 +52,7 @@ void machine_gearbox_defaults(AT_MachineGearbox* g) {
     g->power        = 16.0f;            // 0 to 50 km/h in about 3.5 s in first
     g->drag         = 0.8f;             // about 185 km/h flat out in 6th
     g->engine_brake = 3.0f;
+    g->brake_power  = 30.0f;            // a full stop from 100 km/h in about 3.5 s
     g->shift_point  = (AT_MachineCurve){ 0.5f, 1.0f, AT_MACHINE_SHAPE_EASE_IN, 2.0f, { 0.25f, 0.5f, 0.75f } };
     for (int i = 0; i < AT_MACHINE_GEARS; i++) {
         AT_MachineGear* gear = &g->gear[i];
@@ -64,16 +65,25 @@ void machine_gearbox_defaults(AT_MachineGearbox* g) {
         gear->lift          = 0.85f;
         gear->momentum      = shape(AT_MACHINE_SHAPE_EASE_OUT, 2.0f);
     }
+    g->reverse = g->gear[0];                                // R: about as short as first, a slower shift into it
+    g->reverse.ratio    = 125.0f;
+    g->reverse.up_rpm   = 0.0f;
+    g->reverse.shift_ms = 300.0f;
+}
+
+// a gear's settings: -1 R, 1 .. gears; anything else: first's
+static const AT_MachineGear* gear_of(const AT_MachineGearbox* g, int gear) {
+    if (gear == -1) return &g->reverse;
+    return &g->gear[(gear >= 1 && gear <= g->gears ? gear : 1) - 1];
 }
 
 static float ratio_of(const AT_MachineGearbox* g, int gear) {
-    return gear >= 1 && gear <= g->gears ? g->gear[gear - 1].ratio : 0.0f;
+    return gear == -1 || (gear >= 1 && gear <= g->gears) ? gear_of(g, gear)->ratio : 0.0f;
 }
 
 // The gear a shift's settings come from: the one it goes into (or, into neutral, the one it leaves).
 static const AT_MachineGear* shift_gear(const AT_MachineGearbox* g, const AT_MachineDrive* d) {
-    const int n = d->target >= 1 ? d->target : d->gear;
-    return &g->gear[(n >= 1 ? n : 1) - 1];
+    return gear_of(g, d->target != 0 ? d->target : d->gear);
 }
 
 float machine_gearbox_shift_rpm(const AT_Machine* m, int gear) {
@@ -83,13 +93,17 @@ float machine_gearbox_shift_rpm(const AT_Machine* m, int gear) {
     return at_clampf(up, g->idle_rpm + 300.0f, g->max_rpm);
 }
 
-static void start_shift(AT_Machine* m, int target) {
+#define REVERSE_BELOW_KMH 3.0f              // R goes in (or out, but to N) only this slow
+
+static bool start_shift(AT_Machine* m, int target) {
     AT_MachineDrive* d = &m->drive;
-    if (d->phase != PHASE_DRIVE || target == d->gear || target < 0 || target > m->gearbox.gears) return;
+    if (d->phase != PHASE_DRIVE || target == d->gear || target < -1 || target > m->gearbox.gears) return false;
+    if ((target == -1 || d->gear == -1) && target != 0 && d->speed > REVERSE_BELOW_KMH) return false;   // moving: no R
     d->target  = target;
     d->phase   = PHASE_CLUTCH_OUT;
     d->phase_s = 0.0f;
     d->shifts++;
+    return true;
 }
 
 void machine_shift(AT_Machine* m, int direction) {
@@ -97,6 +111,12 @@ void machine_shift(AT_Machine* m, int direction) {
     int target = m->drive.gear + (direction > 0 ? 1 : -1);
     if (target < 1 && m->gearbox.mode == AT_MACHINE_GEARBOX_AUTOMATIC) target = 1;   // automatic: no neutral by hand
     start_shift(m, target);
+}
+
+bool machine_select_gear(AT_Machine* m, int gear) {
+    if (m->gearbox.mode == AT_MACHINE_GEARBOX_OFF) return false;
+    if (gear == m->drive.gear && m->drive.phase == PHASE_DRIVE) return true;   // in it already
+    return start_shift(m, gear);
 }
 
 void machine_set_gearbox_mode(AT_Machine* m, AT_MachineGearboxMode mode) {
@@ -128,6 +148,8 @@ void machine_drive_step(AT_Machine* m, float dt) {
     if (m->shift_down) { machine_shift(m, -1); m->shift_down = false; }
 
     const float pedal    = m->running ? m->throttle : 0.0f;
+    const float braking  = m->key_down ? 1.0f : at_clampf(m->brake_pedal, 0.0f, 1.0f);   // S held: the brake fully down
+    const float pressed  = at_clampf(m->clutch_pedal, 0.0f, 1.0f);       // the clutch pedal: 1 = the engine free
     const bool  shifting = d->phase != PHASE_DRIVE;
     const float eff      = shifting ? pedal * (1.0f - shift_gear(g, d)->lift) : pedal;
 
@@ -140,38 +162,45 @@ void machine_drive_step(AT_Machine* m, float dt) {
 
     // the vehicle
     const float ratio   = ratio_of(g, d->gear);
-    const float engaged = d->gear >= 1 ? d->clutch : 0.0f;
+    const float engaged = d->gear != 0 ? d->clutch * (1.0f - pressed) : 0.0f;
     const float rev_now = at_clampf((d->rpm - idle) / (limit - idle), 0.0f, 1.0f);
     float traction = eff * (1.0f - 0.35f * rev_now * rev_now) * g->power * (ratio / fmaxf(g->gear[0].ratio, 1.0f));
     if (d->rpm >= limit - 1.0f) traction = 0.0f;                          // on the limiter
     const float v100   = d->speed / 100.0f;
     const float drag   = d->speed > 0.0f ? g->drag * (0.25f + 0.75f * v100 * v100) : 0.0f;
     const float brake  = (1.0f - eff) * g->engine_brake * rev_now;
-    d->speed += (engaged * traction - drag - engaged * brake) * dt;
+    d->speed += (engaged * traction - drag - engaged * brake - braking * g->brake_power) * dt;
     if (d->speed < 0.0f) d->speed = 0.0f;
 
     const float wheel = d->speed * ratio;                                  // the rpm the wheels would give
     const float slip_below = idle * 1.15f;
 
     switch (d->phase) {
-    case PHASE_DRIVE:
+    case PHASE_DRIVE: {
+        float coupled;
         if (d->gear == 0)
-            d->rpm = d->free_rpm;
+            coupled = d->free_rpm;
         else if (wheel < slip_below)
-            d->rpm = fmaxf(wheel, d->free_rpm);                           // pulling away: the clutch slips
+            coupled = fmaxf(wheel, d->free_rpm);                          // pulling away: the clutch slips
         else {
-            d->rpm = wheel;
-            if (d->rpm > limit) {                                         // the rev limiter holds the vehicle too
-                d->rpm   = limit;
+            coupled = wheel;
+            if (coupled > limit && pressed < 0.5f) {                      // the rev limiter holds the vehicle too
+                coupled  = limit;
                 d->speed = limit / ratio;
             }
-            d->free_rpm = d->rpm;                                         // the engine is locked to the wheels
         }
-        d->clutch = 1.0f;
+        // the clutch pedal: pressed, the engine runs free (toward the gas pedal's rpm); as it rises, back to the wheels
+        d->rpm = coupled + (d->free_rpm - coupled) * pressed;
+        if (d->gear != 0 && wheel >= slip_below && pressed < 0.01f)
+            d->free_rpm = d->rpm;                                         // the engine is locked to the wheels
+        d->clutch = 1.0f;                                                 // (the shift's own clutch: closed)
+    }
 
         if (g->mode == AT_MACHINE_GEARBOX_AUTOMATIC && m->running) {
             if (d->gear == 0) {
                 if (pedal > 0.02f) start_shift(m, 1);                     // drive: into first
+            } else if (d->gear < 0) {
+                                                                          // R: the automatic leaves it alone
             } else if (d->gear < g->gears && d->rpm >= machine_gearbox_shift_rpm(m, d->gear)) {
                 start_shift(m, d->gear + 1);
             } else if (d->gear > 1 && d->rpm < g->gear[d->gear - 1].down_rpm) {
@@ -189,7 +218,7 @@ void machine_drive_step(AT_Machine* m, float dt) {
         d->phase_s += dt;
         const float u = at_clampf(d->phase_s / len, 0.0f, 1.0f);
         d->clutch = 1.0f - u;
-        d->rpm = (d->gear >= 1 ? fmaxf(wheel, idle) : d->free_rpm) * (1.0f - u) + d->free_rpm * u;
+        d->rpm = (d->gear != 0 ? fmaxf(wheel, idle) : d->free_rpm) * (1.0f - u) + d->free_rpm * u;
         if (u >= 1.0f) { d->phase = PHASE_SHIFT; d->phase_s = 0.0f; }
         break;
     }
@@ -203,13 +232,13 @@ void machine_drive_step(AT_Machine* m, float dt) {
             d->gear     = d->target;
             d->rpm_from = d->rpm;
             d->phase_s  = 0.0f;
-            d->phase    = d->gear >= 1 ? PHASE_CLUTCH_IN : PHASE_DRIVE;   // into neutral: done
+            d->phase    = d->gear != 0 ? PHASE_CLUTCH_IN : PHASE_DRIVE;   // into neutral: done
         }
         break;
     }
 
     case PHASE_CLUTCH_IN: {
-        const AT_MachineGear* gear = &g->gear[d->gear - 1];
+        const AT_MachineGear* gear = gear_of(g, d->gear);
         const float len = fmaxf(gear->clutch_in_ms * 0.001f, 0.001f);
         d->phase_s += dt;
         const float u = at_clampf(d->phase_s / len, 0.0f, 1.0f);
