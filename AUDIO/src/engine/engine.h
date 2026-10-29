@@ -15,8 +15,10 @@
 //      channel EQ
 //        [H] AT_HOOK_CHANNEL       after the EQ, before fader/pan
 //      fader + pan  ──────────────►  summed into the master bus, or into its bus
+//                   ──────────────►  and into any more buses its routes name,
+//                                    all of it or one side (engine_set_channel_route)
 //
-//    buses (only those a channel is sent to, engine_set_channel_bus):
+//    buses (only those a channel is sent to, engine_set_channel_bus / _route):
 //      sum of their channels → bus EQ → [H] AT_HOOK_BUS → bus volume / mute → bus meter
 //                   ──────────────►  summed into the master bus
 //      A bus is a group of channels with its own EQ and fader, e.g. "everything
@@ -83,13 +85,21 @@ typedef struct {
     void*                self;
 } AT_Source;
 
+// What of a channel goes to one place (engine_set_channel_route), after its fader and pan
+typedef enum {
+    AT_ROUTE_OFF,                   // nothing
+    AT_ROUTE_STEREO,                // all of it, as it is: its left on the left, its right on the right
+    AT_ROUTE_LEFT,                  // its left side alone, on both sides there: one voice, as one speaker plays it
+    AT_ROUTE_RIGHT                  // its right side alone, on both sides
+} AT_Route;
+
 typedef struct {
     AT_Source       source;
     bool            hold;           // latched: note-offs are ignored until the hold is released
     AT_Equalizer    eq;
     AT_ChannelStrip strip;
     uint64_t        clock_offset;   // this channel's source and effects see frame_clock - clock_offset
-    int             bus;            // the bus it is summed into, -1 = the master bus directly
+    uint8_t         route[1 + AT_ENGINE_BUSES];   // where it goes (AT_Route): [0] the master bus directly, [1 + b] bus b
 } AT_EngineChannel;
 
 typedef struct {
@@ -168,6 +178,7 @@ typedef struct {
     AT_Hook          hooks[AT_HOOK_POINT_COUNT][AT_ENGINE_CHANNELS][AT_ENGINE_HOOK_SLOTS];
 
     float            strip_mem[AT_MAX_CHANNELS][AT_MAX_BLOCK_FRAMES];
+    float            post_mem[2][AT_MAX_BLOCK_FRAMES];   // a channel after its fader and pan, when it goes to several places
 
     AT_EngineSync    sync;
 } AT_Engine;
@@ -213,7 +224,12 @@ bool engine_set_channel_mute  (AT_Engine* e, uint32_t channel, bool mute);
 bool engine_set_channel_clock (AT_Engine* e, uint32_t channel, uint64_t offset);
 bool engine_set_master_volume (AT_Engine* e, float volume);
 // Buses: bus = -1 sends the channel to the master bus directly (the default).
+// All of it, and there only: its other routes are off.
 bool engine_set_channel_bus   (AT_Engine* e, uint32_t channel, int bus);
+// Routes: what of the channel (after its fader and pan) goes to one place, bus -1 being the master bus directly; its
+// other places stay as they are. One channel can so feed several buses, each all of it or one side of it (a song's
+// left into one bus, its right into another: two speakers).
+bool engine_set_channel_route (AT_Engine* e, uint32_t channel, int bus, AT_Route route);
 bool engine_set_bus_volume    (AT_Engine* e, uint32_t bus, float volume);
 bool engine_set_bus_mute      (AT_Engine* e, uint32_t bus, bool mute);
 bool engine_set_limiter       (AT_Engine* e, bool enabled);

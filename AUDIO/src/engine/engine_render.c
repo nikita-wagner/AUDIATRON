@@ -14,8 +14,8 @@ static inline void run_hooks(AT_Hook* chain, AT_Buffer* buf) {
         if (chain[s].fn) chain[s].fn(buf, chain[s].user);
 }
 
-// source → [H] → EQ → [H] → fader/pan → (+=) bus
-static void render_channel(AT_Engine* e, int c, AT_Buffer* strip, AT_Buffer* bus) {
+// source → [H] → EQ → [H] → fader/pan → (+=) where it goes: to[0] the master bus, to[1 + b] bus b
+static void render_channel(AT_Engine* e, int c, AT_Buffer* strip, AT_Buffer* post, AT_Buffer* const* to) {
     AT_EngineChannel* ch = &e->channel[c];
     if (!ch->source.type) return;                   // nothing plugged in
 
@@ -26,7 +26,27 @@ static void render_channel(AT_Engine* e, int c, AT_Buffer* strip, AT_Buffer* bus
     run_hooks(e->hooks[AT_HOOK_SOURCE][c], strip);
     eq_process(&ch->eq, strip);
     run_hooks(e->hooks[AT_HOOK_CHANNEL][c], strip);
-    channel_strip_mix(&ch->strip, strip, bus);
+
+    // all of it to one place (nearly always): straight in
+    int places = 0, only = 0;
+    for (int r = 0; r <= AT_ENGINE_BUSES; r++)
+        if (ch->route[r] != AT_ROUTE_OFF) { places++; only = r; }
+    if (places == 1 && ch->route[only] == AT_ROUTE_STEREO) {
+        channel_strip_mix(&ch->strip, strip, to[only]);
+        return;
+    }
+    // else faded and panned once, then into every place, all of it or one side (on both sides there)
+    at_buffer_clear(post);
+    channel_strip_mix(&ch->strip, strip, post);
+    for (int r = 0; r <= AT_ENGINE_BUSES; r++) {
+        const uint8_t route = ch->route[r];
+        if (route == AT_ROUTE_OFF) continue;
+        for (uint32_t k = 0; k < 2 && k < to[r]->channels; k++) {
+            const float* from = route == AT_ROUTE_LEFT ? post->ch[0] : route == AT_ROUTE_RIGHT ? post->ch[1] : post->ch[k];
+            float* into = to[r]->ch[k];
+            for (uint32_t i = 0; i < post->frames; i++) into[i] += from[i];
+        }
+    }
 }
 
 #define BUS_GLIDE 64             // frames a bus fader glides over to a new value (1.3 ms at 48 kHz): no click, on time
@@ -76,23 +96,27 @@ static void render_block(AT_Engine* e, AT_Buffer* bus) {
     };
     for (int c = 0; c < AT_MAX_CHANNELS; c++) strip.ch[c] = e->strip_mem[c];
 
+    // a channel after its fader and pan, when it goes to several places
+    AT_Buffer post = { .channels = 2, .frames = bus->frames, .sample_rate = (uint32_t)e->sample_rate, .frame_clock = e->frame_clock };
+    post.ch[0] = e->post_mem[0], post.ch[1] = e->post_mem[1];
+
     // the buses that have channels: cleared, then their channels are summed into them
     AT_Buffer sums[AT_ENGINE_BUSES];
+    AT_Buffer* to[1 + AT_ENGINE_BUSES] = { bus };
     bool used[AT_ENGINE_BUSES] = { false };
-    for (int c = 0; c < AT_ENGINE_CHANNELS; c++) {
-        int b = e->channel[c].bus;
-        if (b < 0 || b >= AT_ENGINE_BUSES || used[b]) continue;
-        used[b] = true;
-        sums[b] = (AT_Buffer){ .channels = bus->channels < AT_MAX_CHANNELS ? bus->channels : AT_MAX_CHANNELS, .frames = bus->frames,
-                               .sample_rate = bus->sample_rate, .frame_clock = e->frame_clock };
-        for (uint32_t k = 0; k < bus->channels && k < AT_MAX_CHANNELS; k++) sums[b].ch[k] = e->bus_mem[b][k];
-        at_buffer_clear(&sums[b]);
-    }
+    for (int c = 0; c < AT_ENGINE_CHANNELS; c++)
+        for (int b = 0; b < AT_ENGINE_BUSES; b++) {
+            if (e->channel[c].route[1 + b] == AT_ROUTE_OFF || used[b]) continue;
+            used[b] = true;
+            sums[b] = (AT_Buffer){ .channels = bus->channels < AT_MAX_CHANNELS ? bus->channels : AT_MAX_CHANNELS, .frames = bus->frames,
+                                   .sample_rate = bus->sample_rate, .frame_clock = e->frame_clock };
+            for (uint32_t k = 0; k < bus->channels && k < AT_MAX_CHANNELS; k++) sums[b].ch[k] = e->bus_mem[b][k];
+            at_buffer_clear(&sums[b]);
+            to[1 + b] = &sums[b];
+        }
 
-    for (int c = 0; c < AT_ENGINE_CHANNELS; c++) {
-        int b = e->channel[c].bus;
-        render_channel(e, c, &strip, b >= 0 && b < AT_ENGINE_BUSES ? &sums[b] : bus);
-    }
+    for (int c = 0; c < AT_ENGINE_CHANNELS; c++)
+        render_channel(e, c, &strip, &post, to);
     for (int b = 0; b < AT_ENGINE_BUSES; b++)
         if (used[b]) render_bus(e, b, &sums[b], bus);
         else for (int k = 0; k < AT_MAX_CHANNELS; k++) e->bus[b].meter.peak[k] = 0.0f;   // no channels: silent

@@ -31,6 +31,7 @@ enum {
     AT_CMD_SET_SYNC_GRID,       // i0..1 = step (double bits), i2..3 = bar (double bits)
     AT_CMD_SET_SYNC_ORIGIN,     // i0 = fixed, i1 = origin low 32 bits, i2 = high 32 bits
     AT_CMD_SET_CH_BUS,          // i0 = ch, i1 = bus or -1
+    AT_CMD_SET_CH_ROUTE,        // i0 = ch, i1 = bus or -1, i2 = AT_Route
     AT_CMD_SET_BUS_VOLUME,      // i0 = bus, f0 = volume
     AT_CMD_SET_BUS_MUTE         // i0 = bus, i1 = mute
 };

@@ -113,6 +113,10 @@ bool engine_set_channel_bus(AT_Engine* e, uint32_t channel, int bus) {
     return push(e, (AT_Command){ .type = AT_CMD_SET_CH_BUS, .i = { (int)channel, bus } });
 }
 
+bool engine_set_channel_route(AT_Engine* e, uint32_t channel, int bus, AT_Route route) {
+    return push(e, (AT_Command){ .type = AT_CMD_SET_CH_ROUTE, .i = { (int)channel, bus, (int)route } });
+}
+
 bool engine_set_bus_volume(AT_Engine* e, uint32_t bus, float volume) {
     return push(e, (AT_Command){ .type = AT_CMD_SET_BUS_VOLUME, .i = { (int)bus }, .f = { volume } });
 }

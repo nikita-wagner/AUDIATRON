@@ -115,7 +115,15 @@ static void apply_command(AT_Engine* e, const AT_Command* c) {
         break;
 
     case AT_CMD_SET_CH_BUS:
-        if (valid_channel(ch)) e->channel[ch].bus = valid_bus(c->i[1]) ? c->i[1] : -1;
+        if (valid_channel(ch)) {
+            memset(e->channel[ch].route, AT_ROUTE_OFF, sizeof e->channel[ch].route);
+            e->channel[ch].route[valid_bus(c->i[1]) ? 1 + c->i[1] : 0] = AT_ROUTE_STEREO;
+        }
+        break;
+
+    case AT_CMD_SET_CH_ROUTE:
+        if (valid_channel(ch) && (c->i[1] == -1 || valid_bus(c->i[1])) && c->i[2] >= AT_ROUTE_OFF && c->i[2] <= AT_ROUTE_RIGHT)
+            e->channel[ch].route[1 + c->i[1]] = (uint8_t)c->i[2];
         break;
 
     case AT_CMD_SET_BUS_VOLUME:
