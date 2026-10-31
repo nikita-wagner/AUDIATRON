@@ -154,9 +154,13 @@ static void apply_command(AT_Engine* e, const AT_Command* c) {
 
 // Into the waiting list, after every command with the same or an earlier
 // frame, so commands for one frame keep the order they were sent in. A full
-// list cannot wait: the command is applied now (late, but not lost).
+// list cannot wait: the command is applied now (early, but not lost) and counted.
 static void wait_for_frame(AT_Engine* e, const AT_Command* c) {
-    if (e->timed_count == AT_ENGINE_TIMED) { apply_command(e, c); return; }
+    if (e->timed_count == AT_ENGINE_TIMED) {
+        InterlockedIncrement(&e->timed_early);
+        apply_command(e, c);
+        return;
+    }
 
     uint32_t at = e->timed_count;
     while (at > 0 && e->timed[at - 1].frame > c->frame) at--;

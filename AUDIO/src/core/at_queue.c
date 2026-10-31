@@ -37,10 +37,16 @@ bool at_queue_push(AT_Queue* q, const AT_Command* cmd) {
     if (ok) {
         q->items[head & QUEUE_MASK] = *cmd;
         STORE_INDEX(&q->head, (LONG)(head + 1));    // publish after the item is written
+    } else {
+        InterlockedIncrement(&q->dropped);
     }
 
     LeaveCriticalSection(&q->producer_lock);
     return ok;
+}
+
+long at_queue_dropped(const AT_Queue* q) {
+    return InterlockedCompareExchange((volatile LONG*)&q->dropped, 0, 0);
 }
 
 bool at_queue_pop(AT_Queue* q, AT_Command* out) {
