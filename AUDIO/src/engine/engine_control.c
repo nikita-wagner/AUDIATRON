@@ -36,6 +36,14 @@ void engine_at(AT_Engine* e, uint64_t frame, int tag) {
     e->stamp_tag   = tag;
 }
 
+long engine_dropped_commands(const AT_Engine* e) {
+    return at_queue_dropped(&e->queue);
+}
+
+long engine_early_commands(const AT_Engine* e) {
+    return InterlockedCompareExchange((volatile LONG*)&e->timed_early, 0, 0);
+}
+
 bool engine_cancel(AT_Engine* e, int tag) {
     AT_Command c = { .type = AT_CMD_CANCEL, .i = { tag } };    // not stamped: applies at once
     return at_queue_push(&e->queue, &c);

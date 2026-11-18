@@ -38,13 +38,17 @@ typedef struct {
     volatile LONG    head;              // next slot to write (producers)
     volatile LONG    tail;              // next slot to read  (consumer)
     CRITICAL_SECTION producer_lock;
+    volatile LONG    dropped;           // commands that found the ring full, ever
 } AT_Queue;
 
 void at_queue_init   (AT_Queue* q);
 void at_queue_destroy(AT_Queue* q);
 
-// Control threads. Returns false if the ring is full (command dropped).
+// Control threads. Returns false if the ring is full (command dropped and counted).
 bool at_queue_push(AT_Queue* q, const AT_Command* cmd);
+
+// Any thread: how many commands were dropped so far.
+long at_queue_dropped(const AT_Queue* q);
 
 // Audio thread only. Returns false when empty. Never blocks.
 bool at_queue_pop(AT_Queue* q, AT_Command* out);

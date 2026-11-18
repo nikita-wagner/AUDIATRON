@@ -436,6 +436,17 @@ bool app_instruments_setup(AT_App* app, float sample_rate) {
     return true;
 }
 
+int app_track_add(AT_App* app, const AT_AppTrackSpec* spec) {
+    int index = -1;
+    for (int i = AT_TRACK_MAX - 1; i >= 0 && !s_slots[i].live; i--) index = i;
+    if (index < 0) return -1;
+    if (add_track(app, app->sample_rate, spec, index) != ADDED) {
+        free_slot(&s_slots[index]);
+        return -1;
+    }
+    return (int)app->tracks.count - 1;
+}
+
 // ─── Track settings ──────────────────────────────────────────────────────────
 
 void app_set_track_sync(AT_App* app, uint32_t track, bool on) {

@@ -163,6 +163,7 @@ typedef struct {
     // audio side: timed commands waiting for their frame, in frame order
     AT_Command       timed[AT_ENGINE_TIMED];
     uint32_t         timed_count;
+    volatile LONG    timed_early;       // commands that found the list full and were applied at once, ever
 
     AT_EngineChannel channel[AT_ENGINE_CHANNELS];
     AT_EngineBus     bus[AT_ENGINE_BUSES];
@@ -258,6 +259,10 @@ void engine_at    (AT_Engine* e, uint64_t frame, int tag);
 // thread. For timing commands with engine_at.
 uint64_t engine_now(const AT_Engine* e);
 bool engine_cancel(AT_Engine* e, int tag);          // drops waiting commands with this tag (applies at once)
+// Commands lost so far because the queue was full, and timed ones applied
+// before their frame because the waiting list was full; any thread.
+long engine_dropped_commands(const AT_Engine* e);
+long engine_early_commands  (const AT_Engine* e);
 
 // ─── Sync: channels on one clock (engine_sync.c) ────────────────────────────
 //

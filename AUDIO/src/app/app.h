@@ -234,6 +234,9 @@ void app_teardown(AT_App* app);
 // ─── app_instruments.c ───────────────────────────────────────────────────────
 bool app_instruments_setup(AT_App* app, float sample_rate);  // fills app->tracks; false = a sound file would not load
 void app_instruments_teardown(AT_App* app);                  // frees the loaded sound files
+// One more track while everything runs (control thread), any instrument: its track index, -1 = none free or a file
+// would not load. It stays until the teardown; the app owns it as it owns the tracks of the list.
+int  app_track_add(AT_App* app, const AT_AppTrackSpec* spec);
 void app_save_machine(AT_App* app);                          // P on the machine track: machines\machine_NNN.atengine
 // Sync: the track joins the engine's sync clock (engine/engine_sync.c): its loops start in
 // phase with the other synced tracks', its notes and hits wait for the clock's grid.

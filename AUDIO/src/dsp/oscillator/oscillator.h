@@ -7,6 +7,7 @@
 //  Phase is normalized (0..1) and kept in double so long notes don't drift.
 //  Saw and square use PolyBLEP, which smooths the one-sample discontinuity
 //  and removes most of the aliasing a naive saw produces at high notes.
+//  Sine reads a table, as sinf for every sample was the dearest of the waves.
 // ═══════════════════════════════════════════════════════════════════════════
 
 #pragma once
@@ -14,6 +15,12 @@
 #include <stdint.h>
 
 #include "core/at_math.h"
+
+#define AT_SINE_SIZE 4096       // the table's steps round one cycle: a power of 2
+
+// One cycle of a sine, then its first value again: a read between the last two
+// needs no wrap. The first oscillator_init fills it (never the audio thread).
+extern float at_sine_table[AT_SINE_SIZE + 1];
 
 typedef enum {
     AT_WAVE_SINE,
@@ -46,6 +53,16 @@ static inline float oscillator_poly_blep(double t, double dt) {
     return 0.0f;
 }
 
+// sin(2 pi t), read between the table's two nearest values. The mask keeps even
+// a broken phase (NaN, below 0) on the table, as this runs on the audio thread.
+static inline float oscillator_sine(double t) {
+    const double p     = t * AT_SINE_SIZE;
+    const int    whole = (int)p;
+    const float  part  = (float)(p - whole);
+    const float* at    = at_sine_table + (whole & (AT_SINE_SIZE - 1));
+    return at[0] + (at[1] - at[0]) * part;
+}
+
 // Returns the sample at the current phase (-1..+1), then advances one frame.
 static inline float oscillator_tick(AT_Oscillator* o, AT_Waveform wave) {
     double t  = o->phase;
@@ -54,7 +71,7 @@ static inline float oscillator_tick(AT_Oscillator* o, AT_Waveform wave) {
 
     switch (wave) {
     case AT_WAVE_SINE:
-        y = sinf((float)(AT_TWO_PI * t));
+        y = oscillator_sine(t);
         break;
     case AT_WAVE_SAW:
         y = (float)(2.0 * t - 1.0) - oscillator_poly_blep(t, dt);
@@ -77,6 +94,6 @@ static inline float oscillator_tick(AT_Oscillator* o, AT_Waveform wave) {
     }
 
     o->phase += o->phase_inc;
-    if (o->phase >= 1.0) o->phase -= 1.0;
+    if (o->phase >= 1.0) o->phase -= floor(o->phase);    // a note above the sample rate steps more than one cycle
     return y;
 }
